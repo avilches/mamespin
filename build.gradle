@@ -1,0 +1,30 @@
+apply plugin: 'java'
+apply plugin: 'idea'
+ 
+repositories {
+    mavenCentral()
+}
+ 
+dependencies {
+    compile 'org.eclipse.jetty:jetty-server:9.0.0.RC2'
+    compile 'org.eclipse.jetty:jetty-servlet:9.0.0.RC2'
+}
+ 
+sourceCompatibility = 1.8
+targetCompatibility = 1.8
+ 
+task(appRun, dependsOn: 'classes', type: JavaExec) {
+    main = 'app.App'
+    classpath = sourceSets.main.runtimeClasspath
+}
+
+jar{
+    from { configurations.runtime.collect { it.isDirectory() ? it : zipTree(it) } } {
+        exclude "META-INF/*.SF"
+        exclude "META-INF/*.DSA"
+        exclude "META-INF/*.RSA"
+    }
+    manifest {
+       attributes 'Main-Class': 'app.App'
+    }
+}

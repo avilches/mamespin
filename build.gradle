@@ -6,8 +6,8 @@ repositories {
 }
  
 dependencies {
-    compile 'org.eclipse.jetty:jetty-server:9.0.0.RC2'
-    compile 'org.eclipse.jetty:jetty-servlet:9.0.0.RC2'
+    compile 'org.eclipse.jetty:jetty-server:9.2.20.v20161216'
+    compile 'org.eclipse.jetty:jetty-servlet:9.2.20.v20161216'
 }
  
 sourceCompatibility = 1.8

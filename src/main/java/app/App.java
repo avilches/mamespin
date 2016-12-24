@@ -4,10 +4,24 @@
 */
 package app;
 
+import freemarker.ext.servlet.FreemarkerServlet;
+import freemarker.template.Configuration;
+import freemarker.template.TemplateExceptionHandler;
+import org.eclipse.jetty.security.ConstraintMapping;
+import org.eclipse.jetty.security.ConstraintSecurityHandler;
+import org.eclipse.jetty.server.Handler;
 import org.eclipse.jetty.server.Server;
+import org.eclipse.jetty.server.handler.DefaultHandler;
+import org.eclipse.jetty.server.handler.HandlerList;
+import org.eclipse.jetty.server.handler.ResourceHandler;
+import org.eclipse.jetty.servlet.DefaultServlet;
 import org.eclipse.jetty.servlet.ServletContextHandler;
+import org.eclipse.jetty.servlet.ServletHolder;
 import org.eclipse.jetty.util.component.LifeCycle;
 import org.eclipse.jetty.util.resource.Resource;
+import org.eclipse.jetty.util.security.Constraint;
+
+import java.io.File;
 
 /**
  * Simple Jetty FileServer.
@@ -54,17 +68,51 @@ public class App implements LifeCycle.Listener {
         Server server = new Server(port);
         App app = new App(server, port);
         server.addLifeCycleListener(app);
+
         ServletContextHandler rootContext = new ServletContextHandler(ServletContextHandler.SESSIONS);
-        rootContext.setContextPath("/sign");
-        rootContext.setVirtualHosts(new String[] { "mamespin.com" });
-        rootContext.setBaseResource(Resource.newResource("/"));
+        rootContext.setContextPath("/");
+        rootContext.setVirtualHosts(new String[] { "static.mamespin.com" });
+        rootContext.setBaseResource(Resource.newClassPathResource("/"));
+        createDownloadServlet(rootContext, "/download/*");
+        createFreemarkerServlet(rootContext, "*.ftl");
+
+        ServletHolder holderHome = new ServletHolder(new DefaultServlet());
+        holderHome.setInitParameter("resourceBase", "classpath://webapp");
+        holderHome.setInitParameter("dirAllowed","true");
+        holderHome.setInitParameter("pathInfoOnly","true");
+        rootContext.addServlet(holderHome,"/public/*");
+
+
         server.setHandler(rootContext);
-
-        FileRequest.loadResources();
-        rootContext.addServlet(FileRequest.class, "/hi");
-
         server.start();
         server.join();
+    }
+
+    private static void createDownloadServlet(ServletContextHandler rootContext, String path) {
+        ServletHolder holder = new ServletHolder(new FileRequest());
+        holder.setInitOrder(0);
+        rootContext.addServlet(holder, path);
+    }
+
+    private static void createFreemarkerServlet(ServletContextHandler rootContext, String path) {
+        ServletHolder freemarker = new ServletHolder(new FreemarkerServlet());
+        freemarker.setInitOrder(0);
+        freemarker.setInitParameter("TemplatePath", "/templates");
+        freemarker.setInitParameter("NoCache", "true");
+        freemarker.setInitParameter("ContentType", "text/html; charset=UTF-8");
+        freemarker.setInitParameter("default_encoding", "UTF-8");
+        rootContext.addServlet(freemarker, path);
+
+        Constraint constraint = new Constraint();
+        constraint.setAuthenticate(true);
+
+        ConstraintMapping mapping = new ConstraintMapping();
+        mapping.setPathSpec(path);
+        mapping.setConstraint(constraint);
+
+        ConstraintSecurityHandler securityHandler = new ConstraintSecurityHandler();
+        securityHandler.addConstraintMapping(mapping);
+        rootContext.setSecurityHandler(securityHandler);
     }
 
 

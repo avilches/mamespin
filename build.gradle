@@ -8,6 +8,7 @@ repositories {
 dependencies {
     compile 'org.eclipse.jetty:jetty-server:9.2.20.v20161216'
     compile 'org.eclipse.jetty:jetty-servlet:9.2.20.v20161216'
+    compile 'org.freemarker:freemarker:2.3.25-incubating'
 }
  
 sourceCompatibility = 1.8
@@ -18,6 +19,11 @@ task(appRun, dependsOn: 'classes', type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
 }
 
+sourceSets {
+    main {
+        output.resourcesDir = "build/classes/main"
+    }
+}
 jar{
     from { configurations.runtime.collect { it.isDirectory() ? it : zipTree(it) } } {
         exclude "META-INF/*.SF"

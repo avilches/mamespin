@@ -4,6 +4,10 @@
 */
 package app;
 
+import freemarker.template.Configuration;
+import freemarker.template.Template;
+import freemarker.template.TemplateExceptionHandler;
+
 import javax.servlet.*;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
@@ -15,29 +19,46 @@ import java.util.Scanner;
 
 public class FileRequest implements Servlet {
 
-    static String page403;
-    static String page404;
-    static String page500;
-    static String page503;
+    String page403;
+    String page404;
+    String page500;
+    String page503;
 
     FileDownload fileDownload;
 
-    static void loadResources() throws IOException, URISyntaxException {
-        page403 = loadResources("403.html");
-        page404 = loadResources("404.html");
-        page500 = loadResources("500.html");
-        page503 = loadResources("503.html");
+    Configuration cfg;
+
+    void loadResources() throws IOException, URISyntaxException {
+//        page403 = loadResource("403.html");
+//        page404 = loadResource("404.html");
+//        page500 = loadResource("500.html");
+//        page503 = loadResource("503.html");
     }
 
-    private static String loadResources(String resource) throws IOException, URISyntaxException {
+    static String loadResource(String resource) throws IOException, URISyntaxException {
         URL url = Thread.currentThread().getContextClassLoader().getResource(resource);
         String text = new Scanner(url.openStream()).useDelimiter("\\A").next();
+        System.out.println(text);
         return text;
     }
 
 
     public void init(ServletConfig config) throws ServletException {
-        fileDownload = new FileDownload();
+        try {
+            loadResources();
+
+            fileDownload = new FileDownload();
+
+            ServletContext context = config.getServletContext();
+
+            Configuration cfg = new Configuration(Configuration.VERSION_2_3_25);
+            cfg.setServletContextForTemplateLoading(context, "/templates");
+            cfg.setDefaultEncoding("UTF-8");
+            cfg.setTemplateExceptionHandler(TemplateExceptionHandler.RETHROW_HANDLER);
+            cfg.setLogTemplateExceptions(false);
+        } catch (Exception e) {
+            throw new ServletException(e);
+        }
     }
 
     public ServletConfig getServletConfig() {
@@ -51,7 +72,8 @@ public class FileRequest implements Servlet {
         try {
             File file = new File("/users/avilches/Downloads/apertura greach.mov");
             if (!file.exists()) {
-                notFound(response);
+                request.getRequestDispatcher("/404.ftl").forward(request, response);
+//                notFound(response);
             } else {
                 fileDownload.serveResource(request, response, file);
             }

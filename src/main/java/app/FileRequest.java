@@ -7,6 +7,7 @@ package app;
 import freemarker.template.Configuration;
 import freemarker.template.Template;
 import freemarker.template.TemplateExceptionHandler;
+import org.eclipse.jetty.util.resource.Resource;
 
 import javax.servlet.*;
 import javax.servlet.http.HttpServletRequest;
@@ -49,10 +50,8 @@ public class FileRequest implements Servlet {
 
             fileDownload = new FileDownload();
 
-            ServletContext context = config.getServletContext();
-
             cfg = new Configuration(Configuration.VERSION_2_3_25);
-            cfg.setServletContextForTemplateLoading(context, "/templates");
+            cfg.setClassForTemplateLoading(this.getClass(), "/templates");
             cfg.setDefaultEncoding("UTF-8");
             cfg.setTemplateExceptionHandler(TemplateExceptionHandler.RETHROW_HANDLER);
             cfg.setLogTemplateExceptions(false);
@@ -72,7 +71,6 @@ public class FileRequest implements Servlet {
         try {
             File file = new File("/users/avilches/Downloads/apertura greach.mov");
             if (!file.exists()) {
-//                request.getRequestDispatcher("/404.ftl").forward(request, response);
                 notFound(response);
             } else {
                 fileDownload.serveResource(request, response, file);

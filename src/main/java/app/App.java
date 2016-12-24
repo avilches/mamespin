@@ -74,18 +74,22 @@ public class App implements LifeCycle.Listener {
         rootContext.setVirtualHosts(new String[] { "static.mamespin.com" });
         rootContext.setBaseResource(Resource.newClassPathResource("/"));
         createDownloadServlet(rootContext, "/download/*");
-//        createFreemarkerServlet(rootContext, "*.ftl");
-
-        ServletHolder holderHome = new ServletHolder(new DefaultServlet());
-        holderHome.setInitParameter("resourceBase", Resource.newClassPathResource("/webapp").getName());
-        holderHome.setInitParameter("dirAllowed","true");
-        holderHome.setInitParameter("pathInfoOnly","true");
-        rootContext.addServlet(holderHome,"/static/*");
-
+        createStaticResourcesServlet(rootContext, "/webapp", "/static/*");
 
         server.setHandler(rootContext);
         server.start();
         server.join();
+    }
+
+    private static void createStaticResourcesServlet(ServletContextHandler rootContext, String local, String publicPath) {
+        ServletHolder holder = new ServletHolder(new DefaultServlet());
+        holder.setInitOrder(0);
+        String resourceStaticFolder = Resource.newClassPathResource(local).getName();
+        System.out.println("Resource static folder: "+resourceStaticFolder);
+        holder.setInitParameter("resourceBase", resourceStaticFolder);
+        holder.setInitParameter("dirAllowed","true");
+        holder.setInitParameter("pathInfoOnly","true");
+        rootContext.addServlet(holder,publicPath);
     }
 
     private static void createDownloadServlet(ServletContextHandler rootContext, String path) {
@@ -93,29 +97,6 @@ public class App implements LifeCycle.Listener {
         holder.setInitOrder(0);
         rootContext.addServlet(holder, path);
     }
-
-/*
-    private static void createFreemarkerServlet(ServletContextHandler rootContext, String path) {
-        ServletHolder freemarker = new ServletHolder(new FreemarkerServlet());
-        freemarker.setInitOrder(0);
-        freemarker.setInitParameter("TemplatePath", "classpath:"+Resource.newClassPathResource("/templates").getName());
-        freemarker.setInitParameter("NoCache", "true");
-        freemarker.setInitParameter("ContentType", "text/html; charset=UTF-8");
-        freemarker.setInitParameter("default_encoding", "UTF-8");
-        rootContext.addServlet(freemarker, path);
-
-        Constraint constraint = new Constraint();
-        constraint.setAuthenticate(true);
-
-        ConstraintMapping mapping = new ConstraintMapping();
-        mapping.setPathSpec(path);
-        mapping.setConstraint(constraint);
-
-        ConstraintSecurityHandler securityHandler = new ConstraintSecurityHandler();
-        securityHandler.addConstraintMapping(mapping);
-        rootContext.setSecurityHandler(securityHandler);
-    }
-*/
 
 
 }

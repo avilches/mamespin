@@ -40,11 +40,12 @@ public class DownloadServlet implements Servlet {
                 downloader.serve(request, response, file, slow);
             }
         } catch (IOException e) {
-            e.printStackTrace();
-            serverError(response);
-        } catch (ServletException e) {
-            e.printStackTrace();
-            serverError(response);
+            System.err.println(e.getMessage());
+        } catch (Exception e) {
+            e.printStackTrace(System.err);
+            if (!response.isCommitted()) {
+                serverError(response);
+            }
         } finally {
         }
     }

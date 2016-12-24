@@ -96,6 +96,7 @@ public class App implements LifeCycle.Listener {
     @Override
     public void lifeCycleFailure(LifeCycle event, Throwable cause) {
         System.out.println("Failure :" + (System.currentTimeMillis() - start));
+        cause.printStackTrace(System.err);
     }
 
     @Override

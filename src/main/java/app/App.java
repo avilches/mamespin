@@ -76,11 +76,13 @@ public class App implements LifeCycle.Listener {
         createDownloadServlet(rootContext, "/download/*");
         createFreemarkerServlet(rootContext, "*.ftl");
 
+/*
         ServletHolder holderHome = new ServletHolder(new DefaultServlet());
         holderHome.setInitParameter("resourceBase", "classpath://webapp");
         holderHome.setInitParameter("dirAllowed","true");
         holderHome.setInitParameter("pathInfoOnly","true");
-        rootContext.addServlet(holderHome,"/public/*");
+        rootContext.addServlet(holderHome,"/public");
+*/
 
 
         server.setHandler(rootContext);

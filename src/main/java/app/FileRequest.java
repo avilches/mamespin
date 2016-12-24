@@ -51,7 +51,7 @@ public class FileRequest implements Servlet {
 
             ServletContext context = config.getServletContext();
 
-            Configuration cfg = new Configuration(Configuration.VERSION_2_3_25);
+            cfg = new Configuration(Configuration.VERSION_2_3_25);
             cfg.setServletContextForTemplateLoading(context, "/templates");
             cfg.setDefaultEncoding("UTF-8");
             cfg.setTemplateExceptionHandler(TemplateExceptionHandler.RETHROW_HANDLER);
@@ -72,14 +72,16 @@ public class FileRequest implements Servlet {
         try {
             File file = new File("/users/avilches/Downloads/apertura greach.mov");
             if (!file.exists()) {
-                request.getRequestDispatcher("/404.ftl").forward(request, response);
-//                notFound(response);
+//                request.getRequestDispatcher("/404.ftl").forward(request, response);
+                notFound(response);
             } else {
                 fileDownload.serveResource(request, response, file);
             }
         } catch (IOException e) {
+            e.printStackTrace();
             serverError(response);
         } catch (ServletException e) {
+            e.printStackTrace();
             serverError(response);
         } finally {
         }
@@ -87,7 +89,7 @@ public class FileRequest implements Servlet {
 
     private void notFound(HttpServletResponse response) throws IOException {
         response.setStatus(HttpServletResponse.SC_NOT_FOUND);
-        response.getOutputStream().print(page404);
+        cfg.getTemplate("404.ftl").dump(response.getWriter());
     }
 
     private void forbidden(HttpServletResponse response) throws IOException {

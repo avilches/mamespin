@@ -74,7 +74,7 @@ public class App implements LifeCycle.Listener {
         rootContext.setVirtualHosts(new String[] { "static.mamespin.com" });
         rootContext.setBaseResource(Resource.newClassPathResource("/"));
         createDownloadServlet(rootContext, "/download/*");
-        createFreemarkerServlet(rootContext, "*.ftl");
+//        createFreemarkerServlet(rootContext, "*.ftl");
 
         ServletHolder holderHome = new ServletHolder(new DefaultServlet());
         holderHome.setInitParameter("resourceBase", Resource.newClassPathResource("/webapp").getName());
@@ -94,10 +94,11 @@ public class App implements LifeCycle.Listener {
         rootContext.addServlet(holder, path);
     }
 
+/*
     private static void createFreemarkerServlet(ServletContextHandler rootContext, String path) {
         ServletHolder freemarker = new ServletHolder(new FreemarkerServlet());
         freemarker.setInitOrder(0);
-        freemarker.setInitParameter("TemplatePath", "/templates");
+        freemarker.setInitParameter("TemplatePath", "classpath:"+Resource.newClassPathResource("/templates").getName());
         freemarker.setInitParameter("NoCache", "true");
         freemarker.setInitParameter("ContentType", "text/html; charset=UTF-8");
         freemarker.setInitParameter("default_encoding", "UTF-8");
@@ -114,6 +115,7 @@ public class App implements LifeCycle.Listener {
         securityHandler.addConstraintMapping(mapping);
         rootContext.setSecurityHandler(securityHandler);
     }
+*/
 
 
 }

@@ -2,7 +2,9 @@
 * @author Alberto Vilches
 * @date 22/12/2016
 */
-package app;
+package app.download;
+
+import app.download.CPSPauser;
 
 import java.io.FilterOutputStream;
 import java.io.IOException;
@@ -25,12 +27,12 @@ public class SlowOutputStream extends FilterOutputStream {
     // Also handles write(byte[])
     @Override
     public void write(byte[] b, int off, int len) throws IOException {
-        pauser.pause(len);
+        if (pauser != null) pauser.pause(len);
         out.write(b, off, len);
     }
     @Override
     public void write(int b) throws IOException {
-        pauser.pause(1);
+        if (pauser != null) pauser.pause(1);
         out.write(b);
     }
 }

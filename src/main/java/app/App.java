@@ -4,38 +4,83 @@
 */
 package app;
 
-import freemarker.ext.servlet.FreemarkerServlet;
-import freemarker.template.Configuration;
-import freemarker.template.TemplateExceptionHandler;
-import org.eclipse.jetty.security.ConstraintMapping;
-import org.eclipse.jetty.security.ConstraintSecurityHandler;
-import org.eclipse.jetty.server.Handler;
+import app.download.CPSPauser;
+import app.download.DownloadServlet;
+import app.download.Downloader;
 import org.eclipse.jetty.server.Server;
-import org.eclipse.jetty.server.handler.DefaultHandler;
-import org.eclipse.jetty.server.handler.HandlerList;
-import org.eclipse.jetty.server.handler.ResourceHandler;
 import org.eclipse.jetty.servlet.DefaultServlet;
 import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.servlet.ServletHolder;
 import org.eclipse.jetty.util.component.LifeCycle;
 import org.eclipse.jetty.util.resource.Resource;
-import org.eclipse.jetty.util.security.Constraint;
-
-import java.io.File;
-
-/**
- * Simple Jetty FileServer.
- * This is a simple example of Jetty configured as a FileServer.
- */
 
 public class App implements LifeCycle.Listener {
+
+    long start;
     int port;
     Server server;
-    long start = System.currentTimeMillis();
+    Downloader downloader;
+    Renderer renderer;
+    Resources resources;
 
-    public App(Server server, int port) {
-        this.server = server;
+    public static void main(String[] args) throws Exception {
+        final int port = args.length > 0 ? Integer.parseInt(args[0]) : 8080;
+        new App(port).start();
+    }
+
+    public App(int port) {
         this.port = port;
+    }
+
+    private void start() throws Exception {
+        start = System.currentTimeMillis();
+
+        downloader = new Downloader();
+        renderer = new Renderer().init("/templates");
+        resources = new Resources();
+
+        ServletContextHandler ctx = createContext("static.mamespin.com", "/");
+        createDownloadServlet(ctx, "/download/*");
+        createStaticResourcesServlet(ctx, "/static/*", "/static");
+
+        server = new Server(port);
+        server.addLifeCycleListener(this);
+        server.setHandler(ctx);
+        server.start();
+        server.join();
+    }
+
+    private ServletContextHandler createContext(String vhost, String path) {
+        ServletContextHandler ctx = new ServletContextHandler(ServletContextHandler.SESSIONS);
+        ctx.setContextPath(path);
+        ctx.setVirtualHosts(new String[] { vhost });
+        ctx.setBaseResource(Resource.newClassPathResource("/"));
+        return ctx;
+    }
+
+    private void createDownloadServlet(ServletContextHandler rootContext, String path) {
+        DownloadServlet servlet = new DownloadServlet();
+        servlet.downloader = downloader;
+        servlet.renderer = renderer;
+        servlet.verySlow = CPSPauser.createInKBps(100);
+        servlet.slow = CPSPauser.createInKBps(400);
+        servlet.fast = CPSPauser.createInKBps(800);
+        servlet.ultraFast = null;
+        ServletHolder holder = new ServletHolder(servlet);
+        holder.setInitOrder(0);
+        rootContext.addServlet(holder, path);
+    }
+
+    private void createStaticResourcesServlet(ServletContextHandler rootContext, String publicPath, String local) {
+        ServletHolder holder = new ServletHolder(new DefaultServlet());
+        holder.setInitOrder(0);
+        String resourceStaticFolder = Resource.newClassPathResource(local).getName();
+        System.out.println("Resource static folder: "+resourceStaticFolder);
+        holder.setInitParameter("resourceBase", resourceStaticFolder);
+        holder.setInitParameter("dirAllowed","false");
+        holder.setInitParameter("pathInfoOnly","true");
+        holder.setInitParameter("gzip","true");
+        rootContext.addServlet(holder,publicPath);
     }
 
     @Override
@@ -61,41 +106,6 @@ public class App implements LifeCycle.Listener {
     @Override
     public void lifeCycleStopped(LifeCycle event) {
         System.out.println("Stopped :" + (System.currentTimeMillis() - start));
-    }
-
-    public static void main(String[] args) throws Exception {
-        final int port = args.length > 0 ? Integer.parseInt(args[0]) : 8080;
-        Server server = new Server(port);
-        App app = new App(server, port);
-        server.addLifeCycleListener(app);
-
-        ServletContextHandler rootContext = new ServletContextHandler(ServletContextHandler.SESSIONS);
-        rootContext.setContextPath("/");
-        rootContext.setVirtualHosts(new String[] { "static.mamespin.com" });
-        rootContext.setBaseResource(Resource.newClassPathResource("/"));
-        createDownloadServlet(rootContext, "/download/*");
-        createStaticResourcesServlet(rootContext, "/webapp", "/static/*");
-
-        server.setHandler(rootContext);
-        server.start();
-        server.join();
-    }
-
-    private static void createStaticResourcesServlet(ServletContextHandler rootContext, String local, String publicPath) {
-        ServletHolder holder = new ServletHolder(new DefaultServlet());
-        holder.setInitOrder(0);
-        String resourceStaticFolder = Resource.newClassPathResource(local).getName();
-        System.out.println("Resource static folder: "+resourceStaticFolder);
-        holder.setInitParameter("resourceBase", resourceStaticFolder);
-        holder.setInitParameter("dirAllowed","true");
-        holder.setInitParameter("pathInfoOnly","true");
-        rootContext.addServlet(holder,publicPath);
-    }
-
-    private static void createDownloadServlet(ServletContextHandler rootContext, String path) {
-        ServletHolder holder = new ServletHolder(new FileRequest());
-        holder.setInitOrder(0);
-        rootContext.addServlet(holder, path);
     }
 
 

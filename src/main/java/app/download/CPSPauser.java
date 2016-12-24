@@ -2,7 +2,7 @@
 * @author Alberto Vilches
 * @date 22/12/2016
 */
-package app;
+package app.download;
 
 public class CPSPauser {
 

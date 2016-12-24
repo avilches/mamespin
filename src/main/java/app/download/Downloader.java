@@ -2,7 +2,7 @@
 * @author Alberto Vilches
 * @date 22/12/2016
 */
-package app;
+package app.download;
 
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
@@ -14,16 +14,16 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.StringTokenizer;
 
-public class FileDownload {
+public class Downloader {
     protected static final String mimeSeparation = "MAMESPIN_MIME_BOUNDARY";
     protected int INPUT_BUFFER_SIZE = 1024 * 8; // 8 Kbs por lo menos para que el slow llegue a hacer agluna pausa
     protected int RESPONSE_BUFFER_SIZE = 2048;
 
 //    https://svn.apache.org/repos/asf/tomcat/tc8.5.x/trunk/java/org/apache/catalina/servlets/DefaultServlet.java
 
-    protected void serveResource(HttpServletRequest request,
-                                 HttpServletResponse response,
-                                 File file)
+    public void serve(HttpServletRequest request,
+               HttpServletResponse response,
+               File file, CPSPauser pauser)
             throws IOException, ServletException {
 
         long contentLength = file.length();
@@ -34,7 +34,7 @@ public class FileDownload {
 
         if (serveContent) {
             try {
-                ostream = new SlowOutputStream(response.getOutputStream(), CPSPauser.createInKBps(400));
+                ostream = new SlowOutputStream(response.getOutputStream(), pauser);
             } catch (IllegalStateException e) {
             }
         }

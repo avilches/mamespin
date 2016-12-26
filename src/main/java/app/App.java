@@ -89,9 +89,9 @@ public class App implements LifeCycle.Listener {
     }
 
     private static void createDownloadServlet(ServletContextHandler rootContext, String path) {
-        ServletHolder holder = new ServletHolder(new FileRequest());
-        holder.setInitOrder(0);
-        rootContext.addServlet(holder, path);
+//        ServletHolder holder = new ServletHolder(new FileRequest());
+//        holder.setInitOrder(0);
+//        rootContext.addServlet(holder, path);
     }
 
     private static void createFreemarkerServlet(ServletContextHandler rootContext, String path) {

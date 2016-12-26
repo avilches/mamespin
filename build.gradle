@@ -9,13 +9,25 @@ dependencies {
     compile 'org.eclipse.jetty:jetty-server:9.2.20.v20161216'
     compile 'org.eclipse.jetty:jetty-servlet:9.2.20.v20161216'
     compile 'org.freemarker:freemarker:2.3.25-incubating'
+    //Jero
+    compile 'com.google.inject:guice:4.1.0'
+    compile 'com.google.inject.extensions:guice-servlet:4.1.0'
+    compile 'com.google.guava:guava:20.0'
+    compile 'javax.ws.rs:jsr311-api:1.1.1'
+    compile 'javax.inject:javax.inject:1'
+    compile 'org.eclipse.jetty:jetty-webapp:9.2.20.v20161216'
+    compile 'com.fasterxml.jackson.core:jackson-core:2.6.1'
+    compile 'com.fasterxml.jackson.core:jackson-databind:2.6.1'
+    
+    //compile files('lib/funsteroid-core-0.0.1-SNAPSHOT.jar', 'lib/funsteroid-web-0.0.1-SNAPSHOT.jar', 'lib/funsteroid-freemarker-0.0.1-SNAPSHOT.jar')
+    compile fileTree(dir: 'lib', include: ['*.jar'])
 }
  
 sourceCompatibility = 1.8
 targetCompatibility = 1.8
  
 task(appRun, dependsOn: 'classes', type: JavaExec) {
-    main = 'app.App'
+    main = 'app.JeroApp'
     classpath = sourceSets.main.runtimeClasspath
 }
 
@@ -31,6 +43,6 @@ jar{
         exclude "META-INF/*.RSA"
     }
     manifest {
-       attributes 'Main-Class': 'app.App'
+       attributes 'Main-Class': 'app.JeroApp'
     }
 }

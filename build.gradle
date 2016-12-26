@@ -9,6 +9,7 @@ dependencies {
     compile 'org.eclipse.jetty:jetty-server:9.2.20.v20161216'
     compile 'org.eclipse.jetty:jetty-servlet:9.2.20.v20161216'
     compile 'org.freemarker:freemarker:2.3.25-incubating'
+    compile 'redis.clients:jedis:2.9.0'
 }
  
 sourceCompatibility = 1.8

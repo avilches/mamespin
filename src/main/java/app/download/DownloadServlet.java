@@ -15,11 +15,7 @@ import java.io.IOException;
 public class DownloadServlet implements Servlet {
     public Downloader downloader;
     public Renderer renderer;
-
-    public CPSPauser verySlow;
-    public CPSPauser slow;
-    public CPSPauser fast;
-    public CPSPauser ultraFast;
+    public TokenLogic tokenLogic;
 
     public void init(ServletConfig config) throws ServletException {
     }
@@ -37,7 +33,13 @@ public class DownloadServlet implements Servlet {
             if (!file.exists()) {
                 notFound(response);
             } else {
-                downloader.serve(request, response, file, slow);
+                String token = request.getParameter("token");
+                TokenLogic.Result resp = tokenLogic.checkToken(token, request.getRemoteAddr());
+                if (resp.forbidden) {
+                    forbidden(response);
+                } else {
+                    downloader.serve(request, response, file, resp.cpsPauser);
+                }
             }
         } catch (IOException e) {
             System.err.println(e.getMessage());

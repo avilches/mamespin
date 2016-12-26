@@ -7,21 +7,25 @@ package app;
 import app.download.CPSPauser;
 import app.download.DownloadServlet;
 import app.download.Downloader;
+import app.download.TokenLogic;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.servlet.DefaultServlet;
 import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.servlet.ServletHolder;
 import org.eclipse.jetty.util.component.LifeCycle;
 import org.eclipse.jetty.util.resource.Resource;
+import redis.clients.jedis.Jedis;
 
 public class App implements LifeCycle.Listener {
 
     long start;
     int port;
+    String vhost;
     Server server;
     Downloader downloader;
     Renderer renderer;
     Resources resources;
+    Jedis jedis;
 
     public static void main(String[] args) throws Exception {
         final int port = args.length > 0 ? Integer.parseInt(args[0]) : 8080;
@@ -38,6 +42,7 @@ public class App implements LifeCycle.Listener {
         downloader = new Downloader();
         renderer = new Renderer().init("/templates");
         resources = new Resources();
+        jedis = new Jedis("localhost");
 
         ServletContextHandler ctx = createContext("static.mamespin.com", "/");
         createDownloadServlet(ctx, "/download/*");
@@ -51,6 +56,7 @@ public class App implements LifeCycle.Listener {
     }
 
     private ServletContextHandler createContext(String vhost, String path) {
+        this.vhost = vhost;
         ServletContextHandler ctx = new ServletContextHandler(ServletContextHandler.SESSIONS);
         ctx.setContextPath(path);
         ctx.setVirtualHosts(new String[] { vhost });
@@ -62,10 +68,9 @@ public class App implements LifeCycle.Listener {
         DownloadServlet servlet = new DownloadServlet();
         servlet.downloader = downloader;
         servlet.renderer = renderer;
-        servlet.verySlow = CPSPauser.createInKBps(100);
-        servlet.slow = CPSPauser.createInKBps(400);
-        servlet.fast = CPSPauser.createInKBps(800);
-        servlet.ultraFast = null;
+        servlet.tokenLogic = new TokenLogic();
+        servlet.tokenLogic.jedis = jedis;
+
         ServletHolder holder = new ServletHolder(servlet);
         holder.setInitOrder(0);
         rootContext.addServlet(holder, path);
@@ -75,7 +80,6 @@ public class App implements LifeCycle.Listener {
         ServletHolder holder = new ServletHolder(new DefaultServlet());
         holder.setInitOrder(0);
         String resourceStaticFolder = Resource.newClassPathResource(local).getName();
-        System.out.println("Resource static folder: "+resourceStaticFolder);
         holder.setInitParameter("resourceBase", resourceStaticFolder);
         holder.setInitParameter("dirAllowed","false");
         holder.setInitParameter("pathInfoOnly","true");
@@ -90,7 +94,7 @@ public class App implements LifeCycle.Listener {
 
     @Override
     public void lifeCycleStarted(LifeCycle event) {
-        System.out.println("Started. Ready to rock in the " + port + " port! (" + (System.currentTimeMillis() - start) + "ms)");
+        System.out.println("Ready to rock! Use: http://" + vhost+":"+port + " (Started in " + (System.currentTimeMillis() - start) + "ms)");
     }
 
     @Override

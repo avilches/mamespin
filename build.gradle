@@ -1,6 +1,7 @@
+apply plugin: 'groovy'
 apply plugin: 'java'
 apply plugin: 'idea'
- 
+
 repositories {
     mavenCentral()
 }
@@ -10,6 +11,9 @@ dependencies {
     compile 'org.eclipse.jetty:jetty-servlet:9.2.20.v20161216'
     compile 'org.freemarker:freemarker:2.3.25-incubating'
     compile 'redis.clients:jedis:2.9.0'
+    compile 'com.zaxxer:HikariCP:2.5.1'
+    compile 'org.codehaus.groovy:groovy-all:2.4.7'
+    runtime 'mysql:mysql-connector-java:5.1.40'
 }
  
 sourceCompatibility = 1.8
@@ -20,9 +24,13 @@ task(appRun, dependsOn: 'classes', type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
 }
 
+
+
 sourceSets {
     main {
         output.resourcesDir = "build/classes/main"
+        java.srcDirs = []
+        groovy.srcDirs += ["src/main/java"]
     }
 }
 jar{

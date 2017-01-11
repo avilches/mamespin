@@ -23,13 +23,16 @@ public class Downloader {
 
     public void serve(HttpServletRequest request,
                HttpServletResponse response,
-               File file, CPSPauser pauser)
+               File file, CPSPauser pauser, boolean allowRanges, CallbackDownload callbackDownload)
             throws IOException, ServletException {
 
         long contentLength = file.length();
         boolean serveContent = contentLength > 0 && !request.getMethod().equalsIgnoreCase("head");
-        String rangeHeader = request.getHeader("Range");
-        response.setHeader("Accept-Ranges", "bytes");
+        String rangeHeader = null;
+        if (allowRanges) {
+            rangeHeader = request.getHeader("Range");
+            response.setHeader("Accept-Ranges", "bytes");
+        }
         OutputStream ostream = null;
 
         if (serveContent) {
@@ -40,7 +43,7 @@ public class Downloader {
         }
 
         if (rangeHeader == null) {
-            System.out.println(request.getMethod());
+            // System.out.println(request.getMethod());
             // Set the appropriate output headers
             response.setHeader("Content-Disposition", "attachment;filename=\"" + file.getName() + "\"");
             response.setContentType("application/octet-stream");
@@ -53,7 +56,8 @@ public class Downloader {
                     // Silent catch
                 }
                 response.setStatus(HttpServletResponse.SC_OK);
-                copy(new FileInputStream(file), ostream);
+                callbackDownload.start();
+                dumpAll(new FileInputStream(file), ostream, callbackDownload);
             }
 
         } else {
@@ -113,24 +117,29 @@ public class Downloader {
                 }
             }
         }
-
     }
 
-    protected void copy(InputStream is, OutputStream ostream)
+    protected void dumpAll(InputStream is, OutputStream ostream, CallbackDownload callbackDownload)
             throws IOException {
 
-        IOException exception = null;
-        InputStream istream = new BufferedInputStream(is, INPUT_BUFFER_SIZE);
-
-        // Copy the input stream to the output stream
-        exception = copyRange(istream, ostream);
-
-        // Clean up the input stream
-        istream.close();
-
-        // Rethrow any exception that has occurred
-        if (exception != null)
-            throw exception;
+        BufferedInputStream istream = new BufferedInputStream(is, INPUT_BUFFER_SIZE);
+        byte buffer[] = new byte[INPUT_BUFFER_SIZE];
+        try {
+            while (true) {
+                int len = istream.read(buffer);
+                if (len == -1) break;
+                ostream.write(buffer, 0, len);
+                callbackDownload.download(len);
+            }
+        } catch (IOException e) {
+            callbackDownload.abort();
+            throw e;
+        } finally {
+            try {
+                istream.close();
+            } catch (IOException e) {
+            }
+        }
     }
 
     /**
@@ -190,25 +199,6 @@ public class Downloader {
         // Rethrow any exception that has occurred
         if (exception != null)
             throw exception;
-    }
-
-    protected IOException copyRange(InputStream istream, OutputStream ostream) {
-        // Copy the input stream to the output stream
-        IOException exception = null;
-        byte buffer[] = new byte[INPUT_BUFFER_SIZE];
-        while (true) {
-            try {
-                int len = istream.read(buffer);
-                if (len == -1)
-                    break;
-                ostream.write(buffer, 0, len);
-            } catch (IOException e) {
-                exception = e;
-                break;
-            }
-        }
-        return exception;
-
     }
 
     /**

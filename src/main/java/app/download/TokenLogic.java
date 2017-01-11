@@ -4,34 +4,26 @@
 */
 package app.download;
 
+import app.DbLogic;
 import redis.clients.jedis.Jedis;
+
+import javax.sql.DataSource;
 
 public class TokenLogic {
     public Jedis jedis;
+    public DataSource ds;
+    public DbLogic dbLogic;
 
-    Result checkToken(String token, String ip) {
-        String r = jedis.get("token#"+token);
-        if (r == "null" || r == null || r == "denied") {
-            return Result.denied;
-//        } else if (r == "freeSlow") {
-//            return Result.verySlow;
-        }
-        return Result.fast;
+    DbLogic.TokenOptions checkToken(String token, String ip) {
+        DbLogic.TokenOptions tokenOptions = dbLogic.findTokenOptions(token);
+        return tokenOptions;
     }
 
-    enum Result {
-        denied   (true,  null),
-        verySlow (false, CPSPauser.createInKBps(100)),
-        slow     (false, CPSPauser.createInKBps(400)),
-        fast     (false, CPSPauser.createInKBps(800)),
-        ultraFast(false, null);
+    public void markToken(Long id, String state) {
+        dbLogic.markToken(id, state);
+    }
 
-        boolean forbidden = false;
-        CPSPauser cpsPauser;
-
-        Result(boolean forbidden, CPSPauser cpsPauser) {
-            this.forbidden = forbidden;
-            this.cpsPauser = cpsPauser;
-        }
+    public void markToken(Long written, Long id, String state) {
+        dbLogic.markToken(written, id, state);
     }
 }

@@ -5,10 +5,13 @@
 package app;
 
 import freemarker.template.Configuration;
+import freemarker.template.TemplateException;
 import freemarker.template.TemplateExceptionHandler;
 
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.util.HashMap;
+import java.util.Map;
 
 public class Renderer {
     Configuration cfg;
@@ -24,5 +27,11 @@ public class Renderer {
 
     public void render(PrintWriter writer, String template) throws IOException {
         cfg.getTemplate(template+".ftl").dump(writer);
+    }
+
+    public void render(PrintWriter writer, String template, String message) throws IOException, TemplateException {
+        Map<String, String> model = new HashMap<>(1);
+        model.put("message", message);
+        cfg.getTemplate(template+".ftl").process(model, writer);
     }
 }

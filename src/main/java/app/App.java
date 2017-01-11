@@ -8,6 +8,7 @@ import app.download.CPSPauser;
 import app.download.DownloadServlet;
 import app.download.Downloader;
 import app.download.TokenLogic;
+import com.zaxxer.hikari.HikariDataSource;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.servlet.DefaultServlet;
 import org.eclipse.jetty.servlet.ServletContextHandler;
@@ -15,6 +16,11 @@ import org.eclipse.jetty.servlet.ServletHolder;
 import org.eclipse.jetty.util.component.LifeCycle;
 import org.eclipse.jetty.util.resource.Resource;
 import redis.clients.jedis.Jedis;
+
+import java.util.Timer;
+import java.util.TimerTask;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class App implements LifeCycle.Listener {
 
@@ -26,9 +32,11 @@ public class App implements LifeCycle.Listener {
     Renderer renderer;
     Resources resources;
     Jedis jedis;
+    HikariDataSource ds;
+    TokenLogic tokenLogic;
 
     public static void main(String[] args) throws Exception {
-        final int port = args.length > 0 ? Integer.parseInt(args[0]) : 8080;
+        final int port = args.length > 0 ? Integer.parseInt(args[0]) : 7070 /* TODO: configurable*/;
         new App(port).start();
     }
 
@@ -39,14 +47,50 @@ public class App implements LifeCycle.Listener {
     private void start() throws Exception {
         start = System.currentTimeMillis();
 
+        ds = new HikariDataSource();
+        /* TODO: configurable*/
+        ds.setJdbcUrl("jdbc:mysql://localhost:3306/mamespin?useUnicode=true&characterEncoding=UTF-8");
+        ds.setUsername("root");
+        ds.setPassword("");
+
         downloader = new Downloader();
         renderer = new Renderer().init("/templates");
         resources = new Resources();
-        jedis = new Jedis("localhost");
+        tokenLogic = new TokenLogic();
+        tokenLogic.dbLogic = new DbLogic(ds, 60 /* TODO: configurable*/);
+        tokenLogic.jedis = jedis;
+        tokenLogic.ds = ds;
 
-        ServletContextHandler ctx = createContext("static.mamespin.com", "/");
+        // jedis = new Jedis("localhost");
+
+
+        tokenLogic.dbLogic.cleanTokens(0);
+
+        new Timer().scheduleAtFixedRate(new TimerTask() {
+            AtomicBoolean busy = new AtomicBoolean(false);
+            @Override
+            public void run() {
+                try {
+                    if (busy.get()) return;
+                    busy.set(true);
+
+                    // TODO: si hay varios servidores sirviendo, se debe guardar el id del servidor en la tabla user_request y cada servidor
+                    // solo debe borrar sus propias peticiones perdidas. Tal y como esta ahora se borrarian las de todos
+                    tokenLogic.dbLogic.cleanTokens();
+                } catch(Exception e) {
+                    e.printStackTrace(System.err);
+                } finally {
+                    busy.set(false);
+                }
+            }
+        }, TimeUnit.MINUTES.toMillis(1 /*TODO: configurable */),
+            TimeUnit.MINUTES.toMillis(1 /*TODO: configurable */));
+
+
+        ServletContextHandler ctx = createContext("mamespin-download.com" /* TODO: configurable*/, "/");
         createDownloadServlet(ctx, "/download/*");
         createStaticResourcesServlet(ctx, "/static/*", "/static");
+
 
         server = new Server(port);
         server.addLifeCycleListener(this);
@@ -68,8 +112,8 @@ public class App implements LifeCycle.Listener {
         DownloadServlet servlet = new DownloadServlet();
         servlet.downloader = downloader;
         servlet.renderer = renderer;
-        servlet.tokenLogic = new TokenLogic();
-        servlet.tokenLogic.jedis = jedis;
+        servlet.tokenLogic = tokenLogic;
+        servlet.slow = CPSPauser.createInKBps(200 /* TODO: configurable*/);
 
         ServletHolder holder = new ServletHolder(servlet);
         holder.setInitOrder(0);

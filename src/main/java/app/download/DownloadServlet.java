@@ -58,6 +58,9 @@ public class DownloadServlet implements Servlet {
             } else if (resp.getState().equals("finished")) {
                 forbidden(request, response, "Ya te has bajado este fichero :-(");
 
+            } else if (!resp.isUnlimited() && resp.getCurrentDownloads() == 1 /* TODO: configurable por usuario */) {
+                forbidden(request, response, "Demasiadas descargas a la vez. Prueba otra vez cuando acabes las que tienes en curso.");
+
             } else {
                 File file = new File(resp.getPath());
                 if (!file.exists() || file.length() == 0) {
@@ -105,25 +108,25 @@ public class DownloadServlet implements Servlet {
     }
 
     private void notFound(HttpServletRequest request, HttpServletResponse response, String message) throws IOException, TemplateException {
-        response.setStatus(HttpServletResponse.SC_NOT_FOUND);
+        response.sendError(HttpServletResponse.SC_NOT_FOUND, message);
         info(request, response.getStatus(), message);
         renderer.render(response.getWriter(), "404", message);
     }
 
     private void forbidden(HttpServletRequest request, HttpServletResponse response, String message) throws IOException, TemplateException {
-        response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+        response.sendError(HttpServletResponse.SC_FORBIDDEN, message);
         info(request, response.getStatus(), message);
         renderer.render(response.getWriter(), "403", message);
     }
 
     private void unavailable(HttpServletRequest request, HttpServletResponse response, String message) throws IOException, TemplateException {
-        response.setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+        response.sendError(HttpServletResponse.SC_SERVICE_UNAVAILABLE, message);
         info(request, response.getStatus(), message);
         renderer.render(response.getWriter(), "503", message);
     }
 
     private void serverError(HttpServletRequest request, HttpServletResponse response, String message) throws IOException, TemplateException {
-        response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+        response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, message);
         info(request, response.getStatus(), message);
         renderer.render(response.getWriter(), "500", message);
     }

@@ -51,12 +51,21 @@ class DbLogic {
     DbLogic.TokenOptions findTokenOptions(String token) {
         withSql { Sql sql ->
             GroovyRowResult row = sql.firstRow(
-                    "select ur.id as id, u.credits as credits, ur.state as state, rf.local_path " +
+                    "select ur.id as id, ur.user_id as user_id, u.credits as credits, ur.state as state, rf.local_path " +
                             "from user_request ur " +
                             "inner join resource_file rf on ur.resource_file_id = rf.id " +
                             "inner join user u on u.id = ur.user_id " +
                             "where ur.date_removed is null and ur.token = ?", [token])
-            return row ? new DbLogic.TokenOptions(id:row.id, unlimited: row.credits > 0, state: row.state, path: row.local_path) : null
+            if (!row) return null
+            boolean unlimited = row.credits > 0
+            def options = new DbLogic.TokenOptions(id: row.id, userId: row.user_id, unlimited: unlimited, state: row.state, path: row.local_path)
+
+            if (!unlimited) {
+                GroovyRowResult queryDownloadsCount = sql.firstRow(
+                        "select count(id) as c from user_request where user_id = ? and date_removed is null and state = 'download'", [options.userId])
+                options.currentDownloads = queryDownloadsCount.c
+            }
+            return options
         }
     }
 
@@ -74,8 +83,10 @@ class DbLogic {
 
     static class TokenOptions {
         Long id
+        Long userId
         boolean unlimited
         String state
         String path
+        int currentDownloads = 0
     }
 }

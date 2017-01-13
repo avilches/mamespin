@@ -38,13 +38,19 @@ class DbLogic {
     }
 
     void cleanTokens(int timeout = cleanTimeoutMinutes) {
+        long start = System.currentTimeMillis()
         withSql { Sql sql ->
             Date until
             use(groovy.time.TimeCategory) {
                 until = new Date() - timeout.minutes
             }
-            int cleaned = sql.executeUpdate("update user_request set state = 'unlocked', downloaded = 0, last_updated = ? where last_updated < ? and date_removed is null and state = 'download' and downloaded < size", [new Date(), until])
-            println "${new Date().format("dd/MM/yyyy HH:mm:ss.SSS")} cleanTokens(${timeout} minutes) = ${cleaned}"
+            int cleaned = 0
+            String query = "select id, downloaded from user_request where state = 'download' and (downloaded < size or downloaded is null) and (date_downloading < ? or last_updated < ?)"
+            def params = [until, until]
+            sql.eachRow(query, params) { row ->
+                cleaned += abort(row.downloaded as long, row.id as long, true)
+            }
+            println "${new Date().format("dd/MM/yyyy HH:mm:ss.SSS")} cleanTokens(${timeout} minutes) = ${cleaned}. Time: ${System.currentTimeMillis()-start} millis"
         }
     }
 
@@ -55,29 +61,48 @@ class DbLogic {
                             "from user_request ur " +
                             "inner join resource_file rf on ur.resource_file_id = rf.id " +
                             "inner join user u on u.id = ur.user_id " +
-                            "where ur.date_removed is null and ur.token = ?", [token])
+                            "where ur.token = ?", [token])
             if (!row) return null
             boolean unlimited = row.credits > 0
             def options = new DbLogic.TokenOptions(id: row.id, userId: row.user_id, unlimited: unlimited, state: row.state, path: row.local_path)
 
             if (!unlimited) {
                 GroovyRowResult queryDownloadsCount = sql.firstRow(
-                        "select count(id) as c from user_request where user_id = ? and date_removed is null and state = 'download'", [options.userId])
+                        "select count(id) as c from user_request where user_id = ? and state = 'download'", [options.userId])
                 options.currentDownloads = queryDownloadsCount.c
             }
             return options
         }
     }
 
-    void markToken(Long id, String state) {
+    int start(Long id, long size) {
         withSql { Sql sql ->
-            sql.executeUpdate("update user_request set state = ?, last_updated = ? where id = ?", [state, new Date(), id])
+            Date now = new Date()
+            sql.executeUpdate("update user_request set state = 'download', downloaded = 0, size = ?, last_updated = ?, date_download_start = ? where id = ?", [size, now, now, id])
         }
     }
 
-    void markToken(Long written, Long id, String state) {
+    int downloading(Long written, Long id) {
         withSql { Sql sql ->
-            sql.executeUpdate("update user_request set downloaded = ?, state = ?, last_updated = ? where id = ?", [written, state, new Date(), id])
+            Date now = new Date()
+            sql.executeUpdate("update user_request set downloaded = ?, last_updated = ?, date_downloading = ? where id = ? and state = 'download'", [written, now, now, id])
+        }
+    }
+
+    int abort(Long written, Long id, boolean hang) {
+        withSql { Sql sql ->
+            Date now = new Date()
+            if (sql.executeUpdate("update user_request set state = 'unlocked', last_updated = ?, aborts = aborts + 1 where id = ?", [now, id]) == 1) {
+                return sql.executeUpdate("insert into user_request_abort set date_created = ?, user_request_id = ?, downloaded = ?, hang = ?", [now, id, written, hang])
+            }
+            return 0
+        }
+    }
+
+    int finish(Long id, long total) {
+        withSql { Sql sql ->
+            Date now = new Date()
+            sql.executeUpdate("update user_request set state = 'finished', downloaded = ?, last_updated = ?, date_downloaded = ? where id = ?", [total, now, now, id])
         }
     }
 

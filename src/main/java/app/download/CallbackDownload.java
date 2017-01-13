@@ -21,28 +21,28 @@ public class CallbackDownload {
     // TODO: hacer que no se escriba mas rapido que de 15 segundos o mas lento que de un minuto
 
     void start() {
-        tokenLogic.markToken(0L, resp.getId(), "download");
+        tokenLogic.start(resp.getId(), totalSize);
     }
 
-    void download(long written) {
+    boolean download(long written) {
         accumulated += written;
         if (accumulated == totalSize) {
-            tokenLogic.markToken(resp.getId(), "finished");
-            return;
+            tokenLogic.finish(resp.getId(), accumulated);
+            return true;
         }
         double percent = ((double)accumulated) / totalSize * 100;
         int diff = ((int)percent) - lastPercent;
 //        System.out.println("Written +"+written+"="+accumulated+", Last percent "+lastPercent+", current percent "+percent+", diff "+diff);
         if (diff >= 1) {
 //            System.out.println("Written!");
-            tokenLogic.markToken(accumulated, resp.getId(), "download");
             lastPercent = (int)percent;
+            return tokenLogic.downloading(accumulated, resp.getId());
         }
+        return true;
     }
 
     void abort() {
-        // TODO: llevar un registro de abort para evitar abusos
-        tokenLogic.markToken(resp.getId(), "unlocked");
+        tokenLogic.abort(accumulated, resp.getId());
     }
 
 }

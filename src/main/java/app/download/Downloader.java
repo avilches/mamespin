@@ -129,7 +129,9 @@ public class Downloader {
                 int len = istream.read(buffer);
                 if (len == -1) break;
                 ostream.write(buffer, 0, len);
-                callbackDownload.download(len);
+                if (!callbackDownload.download(len)) {
+                    throw new IOException("Cancelado por el admin o state no es download");
+                }
             }
         } catch (IOException e) {
             callbackDownload.abort();

@@ -57,7 +57,7 @@ public class App implements LifeCycle.Listener {
         renderer = new Renderer().init("/templates");
         resources = new Resources();
         tokenLogic = new TokenLogic();
-        tokenLogic.dbLogic = new DbLogic(ds, 60 /* TODO: configurable*/);
+        tokenLogic.dbLogic = new DbLogic(ds, 2 /* TODO: configurable*/);
         tokenLogic.jedis = jedis;
         tokenLogic.ds = ds;
 
@@ -114,6 +114,7 @@ public class App implements LifeCycle.Listener {
         servlet.renderer = renderer;
         servlet.tokenLogic = tokenLogic;
         servlet.slow = CPSPauser.createInKBps(200 /* TODO: configurable*/);
+        servlet.fast = CPSPauser.createInKBps(800 /* TODO: configurable*/);
 
         ServletHolder holder = new ServletHolder(servlet);
         holder.setInitOrder(0);

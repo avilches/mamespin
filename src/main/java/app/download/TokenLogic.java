@@ -19,11 +19,19 @@ public class TokenLogic {
         return tokenOptions;
     }
 
-    public void markToken(Long id, String state) {
-        dbLogic.markToken(id, state);
+    public void start(long id, long size) {
+        dbLogic.start(id, size);
     }
 
-    public void markToken(Long written, Long id, String state) {
-        dbLogic.markToken(written, id, state);
+    public boolean downloading(long written, Long id) {
+        return dbLogic.downloading(written, id) == 1;
+    }
+
+    public void abort(long written, Long id) {
+        dbLogic.abort(written, id, false);
+    }
+
+    public void finish(long id, long total) {
+        dbLogic.finish(id, total);
     }
 }

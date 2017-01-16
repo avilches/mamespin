@@ -68,7 +68,7 @@ class DbLogic {
     int start(TokenOptions tokenOptions, long size) {
         withSql { Sql sql ->
             Date now = new Date()
-            sql.executeUpdate("update file_download fd inner join user_resource ur on (ur.id = fd.user_resource_id) set fd.state = 'download', ur.d.state = 'download', fd.downloaded = 0, fd.size = ?, fd.last_updated = ?, ur.last_updated = ?, date_download_start = ? where id = ?", [size, now, now, now, tokenOptions.id])
+            sql.executeUpdate("update file_download fd inner join user_resource ur on (ur.id = fd.user_resource_id) set fd.state = 'download', ur.state = 'download', fd.downloaded = 0, fd.size = ?, fd.last_updated = ?, ur.last_updated = ?, date_download_start = ? where fd.id = ?", [size, now, now, now, tokenOptions.id])
         }
     }
 

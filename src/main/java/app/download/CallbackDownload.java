@@ -8,26 +8,26 @@ import app.DbLogic;
 
 public class CallbackDownload {
     TokenLogic tokenLogic;
-    DbLogic.TokenOptions resp;
+    DbLogic.TokenOptions tokenOptions;
     long accumulated = 0;
     long totalSize;
 
-    public CallbackDownload(TokenLogic tokenLogic, DbLogic.TokenOptions resp, long totalSize) {
+    public CallbackDownload(TokenLogic tokenLogic, DbLogic.TokenOptions tokenOptions, long totalSize) {
         this.tokenLogic = tokenLogic;
-        this.resp = resp;
+        this.tokenOptions = tokenOptions;
         this.totalSize = totalSize;
     }
     int lastPercent = 0;
     // TODO: hacer que no se escriba mas rapido que de 15 segundos o mas lento que de un minuto
 
     void start() {
-        tokenLogic.start(resp.getId(), totalSize);
+        tokenLogic.start(tokenOptions, totalSize);
     }
 
     boolean download(long written) {
         accumulated += written;
         if (accumulated == totalSize) {
-            tokenLogic.finish(resp.getId(), accumulated);
+            tokenLogic.finish(tokenOptions.getId(), accumulated);
             return true;
         }
         double percent = ((double)accumulated) / totalSize * 100;
@@ -36,13 +36,13 @@ public class CallbackDownload {
         if (diff >= 1) {
 //            System.out.println("Written!");
             lastPercent = (int)percent;
-            return tokenLogic.downloading(accumulated, resp.getId());
+            return tokenLogic.downloading(accumulated, tokenOptions.getId());
         }
         return true;
     }
 
     void abort() {
-        tokenLogic.abort(accumulated, resp.getId());
+        tokenLogic.abort(accumulated, tokenOptions.getId());
     }
 
 }

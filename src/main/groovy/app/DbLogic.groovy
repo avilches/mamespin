@@ -48,16 +48,15 @@ class DbLogic {
     DbLogic.TokenOptions findTokenOptions(String token) {
         withSql { Sql sql ->
             GroovyRowResult row = sql.firstRow(
-                    "select ur.id as id, ur.user_id as user_id, u.credits as credits, ur.state as state, rf.local_path " +
-                            "from file_download ur " +
-                            "inner join resource_file rf on ur.resource_file_id = rf.id " +
-                            "inner join user u on u.id = ur.user_id " +
-                            "where ur.token = ?", [token])
+                    "select fd.id, fd.user_id, fd.user_resource_id, u.slots, u.credits, fd.state, rf.local_path " +
+                            "from file_download fd " +
+                            "inner join resource_file rf on fd.resource_file_id = rf.id " +
+                            "inner join user u on u.id = fd.user_id " +
+                            "where fd.token = ?", [token])
             if (!row) return null
-            boolean unlimited = row.credits > 0
-            DbLogic.TokenOptions options = new DbLogic.TokenOptions(id: row.id, userId: row.user_id, unlimited: unlimited, state: row.state, path: row.local_path)
+            DbLogic.TokenOptions options = new DbLogic.TokenOptions(id: row.id, slots: row.slots, userResourceId: row.user_resource_id, userId: row.user_id, state: row.state, path: row.local_path)
 
-            if (!unlimited) {
+            if (options.slots != null) {
                 GroovyRowResult queryDownloadsCount = sql.firstRow(
                         "select count(id) as c from file_download where user_id = ? and state = 'download'", [options.userId])
                 options.currentDownloads = queryDownloadsCount.c
@@ -66,12 +65,10 @@ class DbLogic {
         }
     }
 
-    int start(Long id, long size) {
+    int start(TokenOptions tokenOptions, long size) {
         withSql { Sql sql ->
             Date now = new Date()
-            sql.executeUpdate("update file_download set state = 'download', downloaded = 0, size = ?, last_updated = ?, date_download_start = ? where id = ?", [size, now, now, id])
-            long user_resource_id = sql.firstRow("select user_resource_id from file_download where id = ?", [id]).user_resource_id
-            sql.executeUpdate("update user_resource set state = 'download', last_updated = ? where id = ? and state = 'unlocked'", [now, user_resource_id])
+            sql.executeUpdate("update file_download fd inner join user_resource ur on (ur.id = fd.user_resource_id) set fd.state = 'download', ur.d.state = 'download', fd.downloaded = 0, fd.size = ?, fd.last_updated = ?, ur.last_updated = ?, date_download_start = ? where id = ?", [size, now, now, now, tokenOptions.id])
         }
     }
 
@@ -101,10 +98,23 @@ class DbLogic {
 
     static class TokenOptions {
         Long id
+        Long userResourceId
         Long userId
-        boolean unlimited
+        Long slots
         String state
         String path
         int currentDownloads = 0
+
+        boolean isSlotOverflow() {
+            slots != null && currentDownloads >= slots
+        }
+
+        boolean isDownloading() {
+            state == "download"
+        }
+
+        boolean isFinished() {
+            state == "finished"
+        }
     }
 }

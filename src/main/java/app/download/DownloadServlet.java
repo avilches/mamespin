@@ -53,13 +53,13 @@ public class DownloadServlet implements Servlet {
             if (resp == null) {
                 notFound(request, response, "Token invalido");
 
-            } else if (resp.getState().equals("download")) {
+            } else if (resp.isDownloading()) {
                 forbidden(request, response, "Te estás bajando este fichero ahora mismo");
 
-            } else if (resp.getState().equals("finished")) {
+            } else if (resp.isFinished()) {
                 forbidden(request, response, "Ya te has bajado este fichero :-(");
 
-            } else if (!resp.isUnlimited() && resp.getCurrentDownloads() >= 1 /* TODO: configurable por usuario, mostrar mensaje merjo*/) {
+            } else if (resp.isSlotOverflow()) {
                 forbidden(request, response, "Demasiadas descargas a la vez. Prueba otra vez cuando acabes las que tienes en curso.");
 
             } else {
@@ -69,7 +69,7 @@ public class DownloadServlet implements Servlet {
                 } else {
                     info(request, response.getStatus(), "0 bytes...");
                     CallbackDownload callback = new CallbackDownload(tokenLogic, resp, file.length());
-                    downloader.serve(request, response, file, resp.isUnlimited() ? fast : slow, false /* TODO algun dia hacerlo */, callback);
+                    downloader.serve(request, response, file, slow, false /* TODO algun dia hacerlo */, callback);
                     info(request, response.getStatus(), file.length()+" bytes.");
                 }
             }

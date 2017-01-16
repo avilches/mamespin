@@ -19,8 +19,8 @@ public class TokenLogic {
         return tokenOptions;
     }
 
-    public void start(long id, long size) {
-        dbLogic.start(id, size);
+    public void start(DbLogic.TokenOptions opts, long size) {
+        dbLogic.start(opts, size);
     }
 
     public boolean downloading(long written, Long id) {

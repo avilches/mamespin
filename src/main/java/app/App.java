@@ -74,7 +74,7 @@ public class App implements LifeCycle.Listener {
                     if (busy.get()) return;
                     busy.set(true);
 
-                    // TODO: si hay varios servidores sirviendo, se debe guardar el id del servidor en la tabla user_request y cada servidor
+                    // TODO: si hay varios servidores sirviendo, se debe guardar el id del servidor en la tabla file_download y cada servidor
                     // solo debe borrar sus propias peticiones perdidas. Tal y como esta ahora se borrarian las de todos
                     tokenLogic.dbLogic.cleanTokens();
                 } catch(Exception e) {

@@ -8,6 +8,8 @@ import app.DbLogic;
 import redis.clients.jedis.Jedis;
 
 import javax.sql.DataSource;
+import java.sql.Timestamp;
+import java.util.Date;
 
 public class TokenLogic {
     public Jedis jedis;
@@ -19,19 +21,19 @@ public class TokenLogic {
         return tokenOptions;
     }
 
-    public void start(DbLogic.TokenOptions opts, long size) {
-        dbLogic.start(opts, size);
+    public void start(Long id, Date date, long size) {
+        dbLogic.start(id, new Timestamp(date.getTime()), size);
     }
 
-    public boolean downloading(long written, Long id) {
-        return dbLogic.downloading(written, id) == 1;
+    public boolean downloading(long written, Date date, Long id) {
+        return dbLogic.downloading(written, new Timestamp(date.getTime()), id) == 1;
     }
 
-    public void abort(long written, Long id) {
-        dbLogic.abort(written, id, false);
+    public void abort(long written, Date startDate, Date endDate, Long id) {
+        dbLogic.abort(written, new Timestamp(startDate.getTime()), new Timestamp(endDate.getTime()), id, false);
     }
 
-    public void finish(long id, long total) {
-        dbLogic.finish(id, total);
+    public void finish(long id, Date startDate, Date endDate, long total) {
+        dbLogic.finish(id, new Timestamp(startDate.getTime()), new Timestamp(endDate.getTime()), total);
     }
 }

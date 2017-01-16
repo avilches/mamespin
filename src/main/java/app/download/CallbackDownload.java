@@ -6,11 +6,14 @@ package app.download;
 
 import app.DbLogic;
 
+import java.util.Date;
+
 public class CallbackDownload {
     TokenLogic tokenLogic;
     DbLogic.TokenOptions tokenOptions;
     long accumulated = 0;
     long totalSize;
+    Date start;
 
     public CallbackDownload(TokenLogic tokenLogic, DbLogic.TokenOptions tokenOptions, long totalSize) {
         this.tokenLogic = tokenLogic;
@@ -21,13 +24,14 @@ public class CallbackDownload {
     // TODO: hacer que no se escriba mas rapido que de 15 segundos o mas lento que de un minuto
 
     void start() {
-        tokenLogic.start(tokenOptions, totalSize);
+        start = new Date();
+        tokenLogic.start(tokenOptions.getId(), start, totalSize);
     }
 
     boolean download(long written) {
         accumulated += written;
         if (accumulated == totalSize) {
-            tokenLogic.finish(tokenOptions.getId(), accumulated);
+            tokenLogic.finish(tokenOptions.getId(), start, new Date(), accumulated);
             return true;
         }
         double percent = ((double)accumulated) / totalSize * 100;
@@ -36,13 +40,13 @@ public class CallbackDownload {
         if (diff >= 1) {
 //            System.out.println("Written!");
             lastPercent = (int)percent;
-            return tokenLogic.downloading(accumulated, tokenOptions.getId());
+            return tokenLogic.downloading(accumulated, new Date(), tokenOptions.getId());
         }
         return true;
     }
 
     void abort() {
-        tokenLogic.abort(accumulated, tokenOptions.getId());
+        tokenLogic.abort(accumulated, start, new Date(), tokenOptions.getId());
     }
 
 }

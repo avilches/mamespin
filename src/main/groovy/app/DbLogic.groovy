@@ -4,6 +4,7 @@ import groovy.sql.GroovyRowResult
 import groovy.sql.Sql
 
 import javax.sql.DataSource
+import java.sql.Timestamp
 
 
 class DbLogic {
@@ -29,19 +30,17 @@ class DbLogic {
     }
 
     void cleanTokens(int timeout = cleanTimeoutMinutes) {
-        long start = System.currentTimeMillis()
+        Date start = new Date()
         withSql { Sql sql ->
             Date until
             use(groovy.time.TimeCategory) {
                 until = new Date() - timeout.minutes
             }
             int cleaned = 0
-            String query = "select id, downloaded from file_download where state = 'download' and (date_downloading < ? or last_updated < ?)"
-            def params = [until, until]
-            sql.eachRow(query, params) { row ->
-                cleaned += abort(row.downloaded as long, row.id as long, true)
+            sql.eachRow("select id, downloaded, date_download_start from file_download where state = 'download' and date_downloading < ?", [until]) { row ->
+                cleaned += abort(row.downloaded as Long, row.date_download_start as Timestamp, start as Timestamp, row.id as Long, true)
             }
-            println "${new Date().format("dd/MM/yyyy HH:mm:ss.SSS")} cleanTokens(${timeout} minutes) = ${cleaned}. Time: ${System.currentTimeMillis()-start} millis"
+            println "${new Date().format("dd/MM/yyyy HH:mm:ss.SSS")} cleanTokens(${timeout} minutes) = ${cleaned}. Time: ${System.currentTimeMillis()-start.time} millis"
         }
     }
 
@@ -65,34 +64,32 @@ class DbLogic {
         }
     }
 
-    int start(TokenOptions tokenOptions, long size) {
+    int start(Long id, Timestamp now, long size) {
         withSql { Sql sql ->
-            Date now = new Date()
-            sql.executeUpdate("update file_download fd inner join user_resource ur on (ur.id = fd.user_resource_id) set fd.state = 'download', ur.state = 'download', fd.downloaded = 0, fd.size = ?, fd.last_updated = ?, ur.last_updated = ?, date_download_start = ? where fd.id = ?", [size, now, now, now, tokenOptions.id])
+            sql.executeUpdate("update file_download fd inner join user_resource ur on (ur.id = fd.user_resource_id) set fd.state = 'download', ur.state = 'download', fd.downloaded = 0, fd.size = ?, fd.last_updated = ?, ur.last_updated = ?, date_download_start = ? where fd.id = ?", [size, now, now, now, id])
         }
     }
 
-    int downloading(Long written, Long id) {
+    int downloading(Long written, Timestamp now, Long id) {
         withSql { Sql sql ->
-            Date now = new Date()
             sql.executeUpdate("update file_download set downloaded = ?, last_updated = ?, date_downloading = ? where id = ? and state = 'download'", [written, now, now, id])
         }
     }
 
-    int abort(Long written, Long id, boolean hang) {
+    int abort(Long written, Timestamp dateStart, Timestamp now, Long id, boolean hang) {
         withSql { Sql sql ->
-            Date now = new Date()
             if (sql.executeUpdate("update file_download set state = 'unlocked', last_updated = ?, aborts = aborts + 1 where id = ?", [now, id]) == 1) {
-                return sql.executeUpdate("insert into file_download_abort set date_created = ?, file_download_id = ?, downloaded = ?, hang = ?", [now, id, written, hang])
+                return 1 + sql.executeUpdate("insert into file_download_session set date_start = ?, date_end = ?, file_download_id = ?, downloaded = ?, state = ?", [dateStart, now, id, written, hang?"ha":"ko"])
             }
             return 0
         }
     }
 
-    int finish(Long id, long total) {
+    int finish(Long id, Timestamp dateStart, Timestamp now, long total) {
         withSql { Sql sql ->
-            Date now = new Date()
-            sql.executeUpdate("update file_download set state = 'finished', downloaded = ?, last_updated = ?, date_downloaded = ? where id = ?", [total, now, now, id])
+            if (sql.executeUpdate("update file_download set state = 'finished', downloaded = ?, last_updated = ?, date_downloaded = ?, oks = oks + 1 where id = ?", [total, now, now, id]) == 1) {
+                return 1 + sql.executeUpdate("insert into file_download_session set date_start = ?, date_end = ?, file_download_id = ?, downloaded = ?, state = ?", [dateStart, now, id, total, 'ok'])
+            }
         }
     }
 

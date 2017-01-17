@@ -29,19 +29,21 @@ class DbLogic {
         }
     }
 
-    void cleanTokens(int timeout = cleanTimeoutMinutes) {
-        Date start = new Date()
+    int cleanTokens(int timeout = cleanTimeoutMinutes) {
+        long start = System.currentTimeMillis()
+        int cleaned = 0
         withSql { Sql sql ->
             Date until
             use(groovy.time.TimeCategory) {
                 until = new Date() - timeout.minutes
             }
-            int cleaned = 0
-            sql.eachRow("select id, downloaded, date_download_start from file_download where state = 'download' and date_downloading < ?", [until]) { row ->
-                cleaned += abort(row.downloaded as Long, row.date_download_start as Timestamp, start as Timestamp, row.id as Long, true)
+            sql.eachRow("select id, downloaded, date_download_start from file_download where state = 'download' and date_downloading is not null and date_downloading < ?", [until]) { row ->
+                cleaned ++
+                abort(row.downloaded as Long, row.date_download_start as Timestamp, new Timestamp(start), row.id as Long, true)
             }
-            println "${new Date().format("dd/MM/yyyy HH:mm:ss.SSS")} cleanTokens(${timeout} minutes) = ${cleaned}. Time: ${System.currentTimeMillis()-start.time} millis"
+            println "${new Date().format("dd/MM/yyyy HH:mm:ss.SSS")} cleanTokens(${timeout} minutes) = ${cleaned}. Time: ${System.currentTimeMillis()-start} millis"
         }
+        return cleaned
     }
 
     DbLogic.TokenOptions findTokenOptions(String token) {
@@ -66,7 +68,7 @@ class DbLogic {
 
     int start(Long id, Timestamp now, long size) {
         withSql { Sql sql ->
-            sql.executeUpdate("update file_download fd inner join user_resource ur on (ur.id = fd.user_resource_id) set fd.state = 'download', ur.state = 'download', fd.downloaded = 0, fd.size = ?, fd.last_updated = ?, ur.last_updated = ?, date_download_start = ? where fd.id = ?", [size, now, now, now, id])
+            sql.executeUpdate("update file_download fd inner join user_resource ur on (ur.id = fd.user_resource_id) set fd.state = 'download', ur.state = 'download', fd.downloaded = 0, fd.size = ?, fd.last_updated = ?, ur.last_updated = ?, fd.date_download_start = ?, fd.date_downloading = ? where fd.id = ?", [size, now, now, now, now, id])
         }
     }
 

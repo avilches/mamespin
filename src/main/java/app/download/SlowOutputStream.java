@@ -15,6 +15,8 @@ import java.io.OutputStream;
  */
 public class SlowOutputStream extends FilterOutputStream {
     private final CPSPauser pauser;
+    int total = 0;
+    public static final int LIMIT_TO_PAUSE = 10000;
     /**
      * Create wrapped Output Stream toe emulate the requested CPS.
      * @param out OutputStream
@@ -27,12 +29,24 @@ public class SlowOutputStream extends FilterOutputStream {
     // Also handles write(byte[])
     @Override
     public void write(byte[] b, int off, int len) throws IOException {
-        if (pauser != null) pauser.pause(len);
+        if (pauser != null) {
+            total += len;
+            if (total > LIMIT_TO_PAUSE) {
+                pauser.pause(total);
+                total = 0;
+            }
+        }
         out.write(b, off, len);
     }
     @Override
     public void write(int b) throws IOException {
-        if (pauser != null) pauser.pause(1);
+        if (pauser != null) {
+            total += 1;
+            if (total > LIMIT_TO_PAUSE) {
+                pauser.pause(total);
+                total = 0;
+            }
+        }
         out.write(b);
     }
 }

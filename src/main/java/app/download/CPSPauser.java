@@ -7,7 +7,6 @@ package app.download;
 public class CPSPauser {
 
     private final int cps; // Characters per second to emulate
-    int total = 0;
 
     //https://wiki.apache.org/jmeter/Controlling%20Bandwidth%20in%20JMeter%20to%20simulate%20different%20networks
     public static CPSPauser createInKBps(int kbps) {
@@ -40,10 +39,9 @@ public class CPSPauser {
      * @param bytes number of bytes being transferred
      */
     public void pause(int bytes) {
-        total += bytes;
         long sleepMS = (bytes * MS_PER_SEC) / cps;
         int sleepNS = ((bytes * MS_PER_SEC) / cps) % NS_PER_MS;
-//        System.out.println("Writing +"+bytes+"="+total+". Sleeping for "+sleepMS+"."+sleepNS);
+//        System.out.println("[CPSPauser] Pause for accumulated bytes of "+bytes+". Sleeping for "+sleepMS+"ms "+sleepNS+"ns");
         try {
             if (sleepMS > 0 || sleepNS > 0) {
                 Thread.sleep(sleepMS, sleepNS);

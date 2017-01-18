@@ -52,25 +52,29 @@ public class DownloadServlet implements Servlet {
             final DbLogic.TokenOptions resp = tokenLogic.checkToken(token, request.getRemoteAddr());
             if (resp == null) {
                 notFound(request, response, "Token invalido");
-
-            } else if (resp.isDownloading()) {
-                forbidden(request, response, "Te estás bajando este fichero ahora mismo");
-
-            } else if (resp.isFinished()) {
-                forbidden(request, response, "Ya te has bajado este fichero :-(");
-
-            } else if (resp.isSlotOverflow()) {
-                forbidden(request, response, "Demasiadas descargas a la vez. Prueba otra vez cuando acabes las que tienes en curso.");
-
             } else {
+
+                String method = request.getMethod().toLowerCase();
+                if (method.equals("get")) {
+                    if (resp.isDownloading()) {
+                        forbidden(request, response, "Te estás bajando este fichero ahora mismo");
+
+                    } else if (resp.isFinished()) {
+                        forbidden(request, response, "Ya te has bajado este fichero :-(");
+
+                    } else if (resp.isSlotOverflow()) {
+                        forbidden(request, response, "Demasiadas descargas a la vez. Prueba otra vez cuando acabes las que tienes en curso.");
+
+                    }
+                }
                 File file = new File(resp.getPath());
                 if (!file.exists() || file.length() == 0) {
                     notFound(request, response, "Local file not found in path");
                 } else {
-                    info(request, response.getStatus(), "0 bytes...");
+//                    info(request, response.getStatus(), "...");
                     CallbackDownload callback = new CallbackDownload(tokenLogic, resp, file.length());
-                    downloader.serve(request, response, file, slow, false /* TODO algun dia hacerlo */, callback);
-                    info(request, response.getStatus(), file.length()+" bytes.");
+                    downloader.serve(request, response, file, slow, false /* TODO: rangos. Ilimitado: ignorar validaciones slots/bajado/bajandose. Limitado: validar para solo dejar resumir */, callback);
+                    info(request, response.getStatus(), callback.accumulated+"/"+file.length()+" END");
                 }
             }
 

@@ -16,8 +16,8 @@ import java.util.StringTokenizer;
 
 public class Downloader {
     protected static final String mimeSeparation = "MAMESPIN_MIME_BOUNDARY";
-    protected int INPUT_BUFFER_SIZE = 1024 * 8; // 8 Kbs por lo menos para que el slow llegue a hacer agluna pausa
-    protected int RESPONSE_BUFFER_SIZE = 2048;
+    protected int INPUT_BUFFER_SIZE = 1024;
+    protected int RESPONSE_BUFFER_SIZE = 1024;
 
 //    https://svn.apache.org/repos/asf/tomcat/tc8.5.x/trunk/java/org/apache/catalina/servlets/DefaultServlet.java
 
@@ -56,7 +56,6 @@ public class Downloader {
                     // Silent catch
                 }
                 response.setStatus(HttpServletResponse.SC_OK);
-                callbackDownload.start();
                 dumpAll(new FileInputStream(file), ostream, callbackDownload);
             }
 
@@ -91,7 +90,7 @@ public class Downloader {
                         // Silent catch
                     }
                     if (ostream != null) {
-                        copy(new FileInputStream(file), ostream, range);
+                        dumpOneRange(new FileInputStream(file), ostream, range, callbackDownload);
                     } else {
                         // we should not get here
                         throw new IllegalStateException();
@@ -109,7 +108,7 @@ public class Downloader {
                         // Silent catch
                     }
                     if (ostream != null) {
-                        copy(new FileInputStream(file), ostream, ranges.iterator());
+                        dumpMultipleRanges(new FileInputStream(file), ostream, ranges.iterator(), callbackDownload);
                     } else {
                         // we should not get here
                         throw new IllegalStateException();
@@ -135,7 +134,6 @@ public class Downloader {
             }
         } catch (IOException e) {
             callbackDownload.abort();
-            throw e;
         } finally {
             try {
                 istream.close();
@@ -153,19 +151,19 @@ public class Downloader {
      * @param range   Range the client wanted to retrieve
      * @throws IOException if an input/output error occurs
      */
-    protected void copy(InputStream resourceInputStream, OutputStream ostream, Range range)
+    protected void dumpOneRange(InputStream resourceInputStream, OutputStream ostream, Range range, CallbackDownload callbackDownload)
             throws IOException {
 
         InputStream istream = new BufferedInputStream(resourceInputStream, INPUT_BUFFER_SIZE);
-        IOException exception = copyRange(istream, ostream, range.start, range.end);
+        IOException exception = copyRange(istream, ostream, range.start, range.end, callbackDownload);
 
         // Clean up the input stream
         istream.close();
 
         // Rethrow any exception that has occurred
-        if (exception != null)
-            throw exception;
-
+        if (exception != null) {
+            callbackDownload.abort();
+        }
     }
 
     /**
@@ -178,7 +176,7 @@ public class Downloader {
      *                retrieve
      * @throws IOException if an input/output error occurs
      */
-    protected void copy(InputStream resourceInputStream, OutputStream ostream, Iterator<Range> ranges)
+    protected void dumpMultipleRanges(InputStream resourceInputStream, OutputStream ostream, Iterator<Range> ranges, CallbackDownload callbackDownload)
             throws IOException {
 
         IOException exception = null;
@@ -192,15 +190,17 @@ public class Downloader {
                         "Content-Range: bytes " + currentRange.start + "-" + currentRange.end + "/" + currentRange.length + "\r\n\r\n";
                 ostream.write(mimeHeader.getBytes(Charset.forName("UTF8")));
                 // Printing content
-                exception = copyRange(istream, ostream, currentRange.start, currentRange.end);
+                exception = copyRange(istream, ostream, currentRange.start, currentRange.end, callbackDownload);
+                istream.close();
             }
         }
 
         String mimeHeader = "\r\n--" + mimeSeparation + "--";
         ostream.write(mimeHeader.getBytes(Charset.forName("UTF8")));
         // Rethrow any exception that has occurred
-        if (exception != null)
-            throw exception;
+        if (exception != null) {
+            callbackDownload.abort();
+        }
     }
 
     /**
@@ -214,7 +214,7 @@ public class Downloader {
      * @param end     End of the range which will be copied
      * @return Exception which occurred during processing
      */
-    protected IOException copyRange(InputStream istream, OutputStream ostream, long start, long end) {
+    protected IOException copyRange(InputStream istream, OutputStream ostream, long start, long end, CallbackDownload callbackDownload) {
 
 //             log("Serving bytes:" + start + "-" + end);
 
@@ -239,9 +239,15 @@ public class Downloader {
                 len = istream.read(buffer);
                 if (bytesToRead >= len) {
                     ostream.write(buffer, 0, len);
+                    if (!callbackDownload.download(len)) {
+                        throw new IOException("Cancelado por el admin o state no es download");
+                    }
                     bytesToRead -= len;
                 } else {
                     ostream.write(buffer, 0, (int) bytesToRead);
+                    if (!callbackDownload.download(bytesToRead)) {
+                        throw new IOException("Cancelado por el admin o state no es download");
+                    }
                     bytesToRead = 0;
                 }
             } catch (IOException e) {

@@ -89,7 +89,7 @@ class DbLogic {
 
     int finish(Long id, Timestamp dateStart, Timestamp now, long total) {
         withSql { Sql sql ->
-            if (sql.executeUpdate("update file_download set state = 'finished', downloaded = ?, last_updated = ?, date_downloaded = ?, oks = oks + 1 where id = ?", [total, now, now, id]) == 1) {
+            if (sql.executeUpdate("update file_download set state = 'finished', downloaded = ?, size = ?, date_download_start = ?, last_updated = ?, date_downloaded = ?, oks = oks + 1 where id = ?", [total, total, dateStart, now, now, id]) == 1) {
                 return 1 + sql.executeUpdate("insert into file_download_session set date_start = ?, date_end = ?, file_download_id = ?, downloaded = ?, state = ?", [dateStart, now, id, total, 'ok'])
             }
         }

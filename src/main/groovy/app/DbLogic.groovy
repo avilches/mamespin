@@ -87,11 +87,19 @@ class DbLogic {
         }
     }
 
-    int finish(Long id, Timestamp dateStart, Timestamp now, long total) {
+    int finish(Long id, Long userResourceId, Timestamp dateStart, Timestamp now, long total) {
         withSql { Sql sql ->
-            if (sql.executeUpdate("update file_download set state = 'finished', downloaded = ?, size = ?, date_download_start = ?, last_updated = ?, date_downloaded = ?, oks = oks + 1 where id = ?", [total, total, dateStart, now, now, id]) == 1) {
-                return 1 + sql.executeUpdate("insert into file_download_session set date_start = ?, date_end = ?, file_download_id = ?, downloaded = ?, state = ?", [dateStart, now, id, total, 'ok'])
+            if (sql.executeUpdate("update file_download set state = 'finished', downloaded = ?, size = ?, date_download_start = ?, last_updated = ?, date_downloaded = ?, oks = oks + 1 where id = ?", [total, total, dateStart, now, now, id]) == 0) {
+                return 0
             }
+            if (sql.executeUpdate("insert into file_download_session set date_start = ?, date_end = ?, file_download_id = ?, downloaded = ?, state = ?", [dateStart, now, id, total, 'ok']) == 0) {
+                return 1
+            }
+            int pending = sql.firstRow("select count(id) count from file_download fd where fd.user_resource_id = ? and fd.state <> 'finished'", [userResourceId]).count
+            if (pending > 0) {
+                return 2
+            }
+            return 2 + sql.executeUpdate("update user_resource ur set ur.state = 'finished', ur.finished = ? where id = ?", [new Date(), userResourceId])
         }
     }
 

@@ -33,7 +33,7 @@ public class TokenLogic {
         dbLogic.abort(written, new Timestamp(startDate.getTime()), new Timestamp(endDate.getTime()), id, false);
     }
 
-    public void finish(long id, Date startDate, Date endDate, long total) {
-        dbLogic.finish(id, new Timestamp(startDate.getTime()), new Timestamp(endDate.getTime()), total);
+    public void finish(long id, long userResourceId, Date startDate, Date endDate, long total) {
+        dbLogic.finish(id, userResourceId, new Timestamp(startDate.getTime()), new Timestamp(endDate.getTime()), total);
     }
 }

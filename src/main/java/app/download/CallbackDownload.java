@@ -35,7 +35,7 @@ public class CallbackDownload {
 
     private void finish() {
         System.out.println("[finish] "+tokenOptions.getId()+" 100% ("+accumulated+"/"+totalSize+")");
-        tokenLogic.finish(tokenOptions.getId(), start, new Date(), accumulated);
+        tokenLogic.finish(tokenOptions.getId(), tokenOptions.getUserResourceId(), start, new Date(), accumulated);
     }
 
     boolean download(long written) {

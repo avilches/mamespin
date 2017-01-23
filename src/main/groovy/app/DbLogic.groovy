@@ -49,13 +49,15 @@ class DbLogic {
     DbLogic.TokenOptions findTokenOptions(String token) {
         withSql { Sql sql ->
             GroovyRowResult row = sql.firstRow(
-                    "select fd.id, fd.user_id, fd.user_resource_id, u.slots, u.credits, fd.state, rf.local_path " +
+                    "select fd.id, fd.user_id, fd.user_resource_id, u.slots, u.credits, fd.state, rf.local_path, rp.level as rLevel, u.level as uLevel " +
                             "from file_download fd " +
+                            "inner join resource_pack rp on fd.resource_id = rp.id " +
                             "inner join resource_file rf on fd.resource_file_id = rf.id " +
                             "inner join user u on u.id = fd.user_id " +
                             "where fd.token = ?", [token])
             if (!row) return null
-            DbLogic.TokenOptions options = new DbLogic.TokenOptions(id: row.id, slots: row.slots, userResourceId: row.user_resource_id, userId: row.user_id, state: row.state, path: row.local_path)
+
+            DbLogic.TokenOptions options = new DbLogic.TokenOptions(id: row.id, level: computeLevel(row.uLevel, row.rLevel), slots: row.slots, userResourceId: row.user_resource_id, userId: row.user_id, state: row.state, path: row.local_path)
 
             if (options.slots != null) {
                 GroovyRowResult queryDownloadsCount = sql.firstRow(
@@ -64,6 +66,11 @@ class DbLogic {
             }
             return options
         }
+    }
+
+    int computeLevel(int uLevel, Integer rLevel) {
+        if (rLevel == null) return uLevel
+        return Math.max(uLevel, rLevel)
     }
 
     int start(Long id, Timestamp now, long size) {
@@ -120,6 +127,7 @@ class DbLogic {
         Long slots
         String state
         String path
+        int level = 0
         int currentDownloads = 0
 
         boolean isSlotOverflow() {

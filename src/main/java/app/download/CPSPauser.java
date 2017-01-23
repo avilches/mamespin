@@ -9,16 +9,20 @@ public class CPSPauser {
     private final int cps; // Characters per second to emulate
 
     //https://wiki.apache.org/jmeter/Controlling%20Bandwidth%20in%20JMeter%20to%20simulate%20different%20networks
-    public static CPSPauser createInKBps(int kbps) {
-        return new CPSPauser(kbps * 1024);  // 1 KB/s = 1024B/s
+    public static CPSPauser createInKBs(int KBs) {
+        return new CPSPauser(KBs * 1024);  // 1 KB/s = 1024cps
     }
 
     public static CPSPauser createInKbps(int kbps) {
-        return new CPSPauser(kbps * 128);  // 1 Kb/s = 1024b/s = 1024/8 cps = 128
+        return new CPSPauser(kbps * 128);  // 1 Kbps = 1024bps = 1024/8 cps = 128
     }
 
     public static CPSPauser createInMbps(int kbps) {
-        return new CPSPauser(kbps * 131072);  // 1 Mb/s = 1024*1024b/s = 1024*1024/8 cps = 131072
+        return new CPSPauser(kbps * 131072);  // 1 Mbps = 1024*1024 bps = 1024*1024/8 cps = 131072
+    }
+
+    public static CPSPauser createInMBs(int MBs) {
+        return new CPSPauser(MBs * 1024 * 1024);  // 1 MB/s = 1024*1024cps
     }
 
     /**

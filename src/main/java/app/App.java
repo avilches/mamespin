@@ -113,8 +113,15 @@ public class App implements LifeCycle.Listener {
         servlet.downloader = downloader;
         servlet.renderer = renderer;
         servlet.tokenLogic = tokenLogic;
-        servlet.slow = CPSPauser.createInKBps(200 /* TODO: configurable*/);
-        servlet.fast = CPSPauser.createInKBps(800 /* TODO: configurable*/);
+        CPSPauser[] levels = new CPSPauser[7];
+        levels[0] = CPSPauser.createInKBs(100);
+        levels[1] = CPSPauser.createInKBs(200);
+        levels[2] = CPSPauser.createInKBs(400);
+        levels[3] = CPSPauser.createInKBs(800);
+        levels[4] = CPSPauser.createInKBs(1000);
+        levels[5] = CPSPauser.createInKBs(2000);
+        levels[6] = null;
+        servlet.levels = levels;
 
         ServletHolder holder = new ServletHolder(servlet);
         holder.setInitOrder(0);

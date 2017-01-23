@@ -22,8 +22,7 @@ public class DownloadServlet implements Servlet {
     public Renderer renderer;
     public TokenLogic tokenLogic;
 
-    public CPSPauser slow;
-    public CPSPauser fast;
+    public CPSPauser[] levels;
 
     public void init(ServletConfig config) throws ServletException {
     }
@@ -39,15 +38,6 @@ public class DownloadServlet implements Servlet {
         HttpServletResponse response = (HttpServletResponse) servletResponse;
         request.setAttribute("start", start);
         try {
-/*
-            File file = new File("/users/avilches/Downloads/apertura greach.mov");
-            if (!file.exists()) {
-                notFound(response);
-            } else {
-                downloader.serve(request, response, file, CPSPauser.createInKBps(600));
-            }
-*/
-
             String token = request.getParameter("token");
             final DbLogic.TokenOptions resp = tokenLogic.checkToken(token, request.getRemoteAddr());
             if (resp == null) {
@@ -75,7 +65,8 @@ public class DownloadServlet implements Servlet {
                 } else {
 //                    info(request, response.getStatus(), "...");
                     CallbackDownload callback = new CallbackDownload(tokenLogic, resp, file.length());
-                    downloader.serve(request, response, file, slow, false /* TODO: rangos. Ilimitado: ignorar validaciones slots/bajado/bajandose. Limitado: validar para solo dejar resumir */, callback);
+                    CPSPauser pauser = levels[Math.max(0, Math.min(resp.getLevel(), levels.length - 1))];
+                    downloader.serve(request, response, file, pauser, false /* TODO: rangos. Ilimitado: ignorar validaciones slots/bajado/bajandose. Limitado: validar para solo dejar resumir */, callback);
                     info(request, response.getStatus(), callback.accumulated+"/"+file.length()+" END");
                 }
             }

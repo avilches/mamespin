@@ -51,19 +51,21 @@ public class DownloadServlet implements Servlet {
             String token = request.getParameter("token");
             final DbLogic.TokenOptions resp = tokenLogic.checkToken(token, request.getRemoteAddr());
             if (resp == null) {
-                notFound(request, response, "Token invalido");
+                notFound(request, response, "Token incorrecto [subcode:1]");
             } else {
 
                 String method = request.getMethod().toLowerCase();
                 if (method.equals("get")) {
                     if (resp.isDownloading()) {
-                        forbidden(request, response, "Te estás bajando este fichero ahora mismo");
+                        notFound(request, response, "Token incorrecto [subcode:2]");
+//                        forbidden(request, response, "Te estás bajando este fichero ahora mismo");
 
                     } else if (resp.isFinished()) {
-                        forbidden(request, response, "Ya te has bajado este fichero :-(");
+                        notFound(request, response, "Token incorrecto [subcode:3]");
+//                        forbidden(request, response, "Ya te has bajado este fichero. Si necesitas descargarlo otra vez debes generar un nuevo enlace.");
 
                     } else if (resp.isSlotOverflow()) {
-                        forbidden(request, response, "Demasiadas descargas a la vez. Prueba otra vez cuando acabes las que tienes en curso.");
+                        forbidden(request, response, "No tienes slots libres para iniciar esta descarga.");
 
                     }
                 }

@@ -37,9 +37,9 @@ class DbLogic {
             use(groovy.time.TimeCategory) {
                 until = new Date() - timeout.minutes
             }
-            sql.eachRow("select id, downloaded, date_download_start from file_download where state = 'download' and date_downloading is not null and date_downloading < ?", [until]) { row ->
+            sql.eachRow("select id, downloaded, date_download_start, user_resource_id from file_download where state = 'download' and date_downloading is not null and date_downloading < ?", [until]) { row ->
                 cleaned ++
-                abort(row.downloaded as Long, row.date_download_start as Timestamp, new Timestamp(start), row.id as Long, true)
+                abort(row.downloaded as Long, row.date_download_start as Timestamp, new Timestamp(start), row.id as Long, row.user_resource_id as Long, true)
             }
             println "${new Date().format("dd/MM/yyyy HH:mm:ss.SSS")} cleanTokens(${timeout} minutes) = ${cleaned}. Time: ${System.currentTimeMillis()-start} millis"
         }
@@ -78,28 +78,38 @@ class DbLogic {
         }
     }
 
-    int abort(Long written, Timestamp dateStart, Timestamp now, Long id, boolean hang) {
+    int abort(Long written, Timestamp dateStart, Timestamp now, Long id, Long userResourceId, boolean hang) {
         withSql { Sql sql ->
-            if (sql.executeUpdate("update file_download set state = 'unlocked', last_updated = ?, aborts = aborts + 1 where id = ?", [now, id]) == 1) {
-                return 1 + sql.executeUpdate("insert into file_download_session set date_start = ?, date_end = ?, file_download_id = ?, downloaded = ?, state = ?", [dateStart, now, id, written, hang?"ha":"ko"])
+            if (sql.executeUpdate("update file_download fd inner join user_resource ur on (ur.id = fd.user_resource_id)  set fd.state = 'unlocked', fd.last_updated = ?, fd.aborts = fd.aborts + 1, ur.aborts = ur.aborts + 1 where fd.id = ?", [now, id]) == 0) {
+                return 0
             }
-            return 0
+            if (sql.executeUpdate("insert into file_download_session set date_start = ?, date_end = ?, file_download_id = ?, downloaded = ?, state = ?", [dateStart, now, id, written, hang?"ha":"ko"]) == 0) {
+                return 1
+            }
+            return 2 + updateUserResourceState(sql, userResourceId)
         }
     }
 
     int finish(Long id, Long userResourceId, Timestamp dateStart, Timestamp now, long total) {
         withSql { Sql sql ->
-            if (sql.executeUpdate("update file_download set state = 'finished', downloaded = ?, size = ?, date_download_start = ?, last_updated = ?, date_downloaded = ?, oks = oks + 1 where id = ?", [total, total, dateStart, now, now, id]) == 0) {
+            if (sql.executeUpdate("update file_download fd inner join user_resource ur on (ur.id = fd.user_resource_id) set fd.token = ?, fd.state = 'finished', fd.downloaded = ?, fd.size = ?, fd.date_download_start = ?, fd.last_updated = ?, fd.date_downloaded = ?, fd.oks = fd.oks + 1, ur.oks = ur.oks + 1 where fd.id = ?", [null, total, total, dateStart, now, now, id]) == 0) {
                 return 0
             }
             if (sql.executeUpdate("insert into file_download_session set date_start = ?, date_end = ?, file_download_id = ?, downloaded = ?, state = ?", [dateStart, now, id, total, 'ok']) == 0) {
                 return 1
             }
-            int pending = sql.firstRow("select count(id) count from file_download fd where fd.user_resource_id = ? and fd.state <> 'finished'", [userResourceId]).count
-            if (pending > 0) {
-                return 2
-            }
-            return 2 + sql.executeUpdate("update user_resource ur set ur.state = 'finished', ur.finished = ? where id = ?", [new Date(), userResourceId])
+            return 2 + updateUserResourceState(sql, userResourceId)
+        }
+    }
+
+    private int updateUserResourceState(Sql sql, long userResourceId) {
+        int pending = sql.firstRow("select count(id) count from file_download fd where fd.user_resource_id = ? and fd.state <> 'finished'", [userResourceId]).count
+        if (pending == 0) {
+            return sql.executeUpdate("update user_resource ur set ur.state = 'finished', ur.finished = ? where id = ?", [new Date(), userResourceId])
+        }
+        int downs = sql.firstRow("select count(id) count from file_download fd where fd.user_resource_id = ? and fd.state = 'download'", [userResourceId]).count
+        if (downs == 0) {
+            return sql.executeUpdate("update user_resource ur set ur.state = 'unlocked', ur.finished = ? where id = ?", [new Date(), userResourceId])
         }
     }
 

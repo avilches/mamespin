@@ -29,8 +29,8 @@ public class TokenLogic {
         return dbLogic.downloading(written, new Timestamp(date.getTime()), id) == 1;
     }
 
-    public void abort(long written, Date startDate, Date endDate, Long id) {
-        dbLogic.abort(written, new Timestamp(startDate.getTime()), new Timestamp(endDate.getTime()), id, false);
+    public void abort(long written, Date startDate, Date endDate, Long id, long userResourceId) {
+        dbLogic.abort(written, new Timestamp(startDate.getTime()), new Timestamp(endDate.getTime()), id, userResourceId, false);
     }
 
     public void finish(long id, long userResourceId, Date startDate, Date endDate, long total) {

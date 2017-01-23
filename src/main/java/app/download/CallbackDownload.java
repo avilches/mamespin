@@ -23,7 +23,7 @@ public class CallbackDownload {
         this.tokenOptions = tokenOptions;
         this.totalSize = totalSize;
     }
-    double lastPercent = 0;
+    double lastPercent = -1000;
     // TODO: hacer que no se escriba mas rapido que de 15 segundos o mas lento que de un minuto
     boolean started = false;
 
@@ -71,7 +71,7 @@ public class CallbackDownload {
 
     void abort() {
         System.out.println("[abort] "+tokenOptions.getId()+" ("+accumulated+"/"+totalSize+")");
-        tokenLogic.abort(accumulated, start, new Date(), tokenOptions.getId());
+        tokenLogic.abort(accumulated, start, new Date(), tokenOptions.getId(), tokenOptions.getUserResourceId());
     }
 
 }

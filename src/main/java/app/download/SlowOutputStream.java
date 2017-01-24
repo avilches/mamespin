@@ -45,7 +45,7 @@ public class SlowOutputStream extends FilterOutputStream {
 //        System.out.println("Chequeo "+now+", lastCheck: "+lastCheck+", elapsed check: "+(now - lastCheck )+ "-> total "+total+"*1000 / cps:"+pauser.cps+", millisTheory:"+writtenTimeMillisTheorical+", started: "+start+", writtenTimeMillisReal: "+writtenTimeMillisReal);
         if (writtenTimeMillisTheorical > writtenTimeMillisReal) {
             try {
-                System.out.println("    Pause "+(writtenTimeMillisTheorical-writtenTimeMillisReal)+" millis");
+//                System.out.println("    Pause "+(writtenTimeMillisTheorical-writtenTimeMillisReal)+" millis");
                 Thread.sleep(writtenTimeMillisTheorical - writtenTimeMillisReal);
             } catch (InterruptedException e) {
             }

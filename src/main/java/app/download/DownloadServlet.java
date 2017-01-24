@@ -33,46 +33,11 @@ public class DownloadServlet implements Servlet {
 
     public void service(ServletRequest servletRequest, ServletResponse servletResponse) throws ServletException, IOException {
 
-        long start = System.currentTimeMillis();
         HttpServletRequest request = (HttpServletRequest) servletRequest;
         HttpServletResponse response = (HttpServletResponse) servletResponse;
-        request.setAttribute("start", start);
         try {
-            String token = request.getParameter("token");
-            final DbLogic.TokenOptions resp = tokenLogic.checkToken(token, request.getRemoteAddr());
-            if (resp == null) {
-                notFound(request, response, "Token incorrecto [subcode:1]");
-            } else {
 
-                String method = request.getMethod().toLowerCase();
-                if (method.equals("get")) {
-                    if (resp.isDownloading()) {
-                        notFound(request, response, "Token incorrecto [subcode:2]");
-//                        forbidden(request, response, "Te estás bajando este fichero ahora mismo");
-
-                    } else if (resp.isFinished()) {
-                        notFound(request, response, "Token incorrecto [subcode:3]");
-//                        forbidden(request, response, "Ya te has bajado este fichero. Si necesitas descargarlo otra vez debes generar un nuevo enlace.");
-
-                    } else if (resp.isSlotOverflow()) {
-                        forbidden(request, response, "No tienes slots libres para iniciar esta descarga.");
-
-                    }
-                }
-                File file = new File(resp.getPath());
-                if (!file.exists() || file.length() == 0) {
-                    notFound(request, response, "Local file not found in path");
-                } else {
-//                    info(request, response.getStatus(), "...");
-                    CallbackDownload callback = new CallbackDownload(tokenLogic, resp, file.length());
-                    int cps = cpss[Math.max(0, Math.min(resp.getLevel(), cpss.length - 1))];
-                    downloader.serve(request, response, file, cps, false /* TODO: rangos. Ilimitado: ignorar validaciones slots/bajado/bajandose. Limitado: validar para solo dejar resumir */, callback);
-                    long elapsed = System.currentTimeMillis() - start;
-                    long KBs = file.length() / elapsed;
-
-                    info(request, response.getStatus(), callback.accumulated+"/"+file.length()+". Speed: "+KBs+" KB/s");
-                }
-            }
+            validateThenExecute(request, response);
 
         } catch (TemplateException e) {
             System.err.println(e.getMessage());
@@ -90,22 +55,83 @@ public class DownloadServlet implements Servlet {
         }
     }
 
+    private void validateThenExecute(HttpServletRequest request, HttpServletResponse response) throws IOException, TemplateException, ServletException {
+        String token = request.getParameter("token");
+
+        DbLogic.TokenOptions tokenOptions = tokenLogic.checkToken(token, request.getRemoteAddr());
+        if (tokenOptions == null) {
+            notFound(request, response, "Token incorrecto [subcode:1]");
+            return;
+        }
+
+        String method = request.getMethod().toLowerCase();
+
+        if (!method.equals("get") && !method.equals("head")) {
+            notAllowed(request, response, "Metodo no permitido");
+            return;
+        }
+
+        boolean isGet = method.equals("get");
+        if (isGet) {
+            // Solo se validan los get
+            if (tokenOptions.isDownloading()) {
+                notFound(request, response, "Token incorrecto [subcode:2]");
+//                        forbidden(request, response, "Te estás bajando este fichero ahora mismo");
+                return;
+
+            } else if (tokenOptions.isFinished()) {
+                notFound(request, response, "Token incorrecto [subcode:3]");
+//                        forbidden(request, response, "Ya te has bajado este fichero. Si necesitas descargarlo otra vez debes generar un nuevo enlace.");
+                return;
+
+            } else if (tokenOptions.isSlotOverflow()) {
+                forbidden(request, response, "No tienes slots libres para iniciar esta descarga.");
+                return;
+            }
+        }
+
+        File file = new File(tokenOptions.getPath());
+        if (!file.exists() || file.length() == 0) {
+            notFound(request, response, "Local file not found in path");
+            return;
+        }
+
+        executeDownload(request, response, tokenOptions, file);
+    }
+
+    private void executeDownload(HttpServletRequest request, HttpServletResponse response, DbLogic.TokenOptions tokenOptions, File file) throws IOException, ServletException {
+        long start = System.currentTimeMillis();
+        request.setAttribute("start", start);
+//        info(request, response.getStatus(), "...");
+        DownloadHandler callback = new DownloadHandler(tokenLogic, tokenOptions, file.length());
+        int cps = getCPSFromLevel(tokenOptions.getLevel());
+        downloader.serve(request, response, file, cps, false /* TODO: rangos. Ilimitado: ignorar validaciones slots/bajado/bajandose. Limitado: validar para solo dejar resumir */, callback);
+        long elapsed = System.currentTimeMillis() - start;
+        long KBs = callback.totalWritten / elapsed;
+        info(request, response.getStatus(), callback.totalWritten + "/" + file.length() + ". Speed: " + KBs + " KB/s");
+    }
+
+    private int getCPSFromLevel(int level) {
+        int securePos = Math.max(0, Math.min(level, cpss.length - 1));
+        return cpss[securePos];
+    }
+
     private void info(HttpServletRequest request, int status, String message) {
-        long start = (long)request.getAttribute("start");
+        long start = (long) request.getAttribute("start");
         long millis = System.currentTimeMillis() - start;
 
         String time = String.format("%02d:%02d:%02d:%02d",
-            TimeUnit.MILLISECONDS.toHours(millis),
-            TimeUnit.MILLISECONDS.toMinutes(millis) % TimeUnit.HOURS.toMinutes(1),
-            TimeUnit.MILLISECONDS.toSeconds(millis) % TimeUnit.MINUTES.toSeconds(1),
-            millis % TimeUnit.SECONDS.toMillis(1));
+                TimeUnit.MILLISECONDS.toHours(millis),
+                TimeUnit.MILLISECONDS.toMinutes(millis) % TimeUnit.HOURS.toMinutes(1),
+                TimeUnit.MILLISECONDS.toSeconds(millis) % TimeUnit.MINUTES.toSeconds(1),
+                millis % TimeUnit.SECONDS.toMillis(1));
 
-        String path = request.getServletPath() + (request.getQueryString() != null || !request.getQueryString().trim().equals("")? "?" + request.getQueryString() : "");
+        String path = request.getServletPath() + (request.getQueryString() != null || !request.getQueryString().trim().equals("") ? "?" + request.getQueryString() : "");
         System.out.println(new SimpleDateFormat("dd/MM/yyyy HH:mm:ss.SSS").format(new Date()) + " " +
                 request.getRemoteAddr() + " " +
-                "["+request.getMethod() + "] "+status+" " +
-                "["+time+"] "+
-                path+" "+(message != null?message:""));
+                "[" + request.getMethod() + "] " + status + " " +
+                "[" + time + "] " +
+                path + " " + (message != null ? message : ""));
     }
 
     private void notFound(HttpServletRequest request, HttpServletResponse response, String message) throws IOException, TemplateException {
@@ -120,8 +146,8 @@ public class DownloadServlet implements Servlet {
         renderer.render(response.getWriter(), "403", message);
     }
 
-    private void unavailable(HttpServletRequest request, HttpServletResponse response, String message) throws IOException, TemplateException {
-        response.sendError(HttpServletResponse.SC_SERVICE_UNAVAILABLE, message);
+    private void notAllowed(HttpServletRequest request, HttpServletResponse response, String message) throws IOException, TemplateException {
+        response.sendError(HttpServletResponse.SC_METHOD_NOT_ALLOWED, message);
         info(request, response.getStatus(), message);
         renderer.render(response.getWriter(), "503", message);
     }

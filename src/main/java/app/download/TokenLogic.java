@@ -21,8 +21,8 @@ public class TokenLogic {
         return tokenOptions;
     }
 
-    public void start(Long id, Date date, long size) {
-        dbLogic.start(id, new Timestamp(date.getTime()), size);
+    public boolean start(Long id, Date date, long size) {
+        return dbLogic.start(id, new Timestamp(date.getTime()), size) == 2;
     }
 
     public boolean downloading(long written, Date date, Long id) {

@@ -15,15 +15,15 @@ import java.util.List;
 import java.util.StringTokenizer;
 
 public class Downloader {
-    protected static final String mimeSeparation = "MAMESPIN_MIME_BOUNDARY";
-    protected int INPUT_BUFFER_SIZE = 1024;
-    protected int RESPONSE_BUFFER_SIZE = 1024;
+    protected static final String mimeSeparation = "FILESRV_MIME_BOUNDARY";
+    protected static final int INPUT_BUFFER_SIZE = 4096;
+    protected static final int RESPONSE_BUFFER_SIZE = 2048;
 
 //    https://svn.apache.org/repos/asf/tomcat/tc8.5.x/trunk/java/org/apache/catalina/servlets/DefaultServlet.java
 
     public void serve(HttpServletRequest request,
-               HttpServletResponse response,
-               File file, int cps, boolean allowRanges, CallbackDownload callbackDownload)
+                      HttpServletResponse response,
+                      File file, int cps, boolean allowRanges, DownloadHandler downloadHandler)
             throws IOException, ServletException {
 
         long contentLength = file.length();
@@ -33,36 +33,25 @@ public class Downloader {
             rangeHeader = request.getHeader("Range");
             response.setHeader("Accept-Ranges", "bytes");
         }
-        OutputStream ostream = null;
-
-        if (serveContent) {
-            try {
-                ostream = new SlowOutputStream(response.getOutputStream(), cps);
-            } catch (IllegalStateException e) {
-            }
-        }
+        OutputStream ostream = serveContent && cps > 0 ? new SlowOutputStream(response.getOutputStream(), cps) : response.getOutputStream();
 
         if (rangeHeader == null) {
             // System.out.println(request.getMethod());
             // Set the appropriate output headers
-            response.setHeader("Content-Disposition", "attachment;filename=\"" + file.getName() + "\"");
+            configureFileNameHeader(response, file);
             response.setContentType("application/octet-stream");
             response.setContentLength((int) contentLength);
 
             if (serveContent) {
-                try {
-                    response.setBufferSize(RESPONSE_BUFFER_SIZE);
-                } catch (IllegalStateException e) {
-                    // Silent catch
-                }
+                configureBuffer(response);
                 response.setStatus(HttpServletResponse.SC_OK);
-                dumpAll(new FileInputStream(file), ostream, callbackDownload);
+                dumpAll(new FileInputStream(file), ostream, downloadHandler);
             }
 
         } else {
             List<Range> ranges = parseRange(rangeHeader, response, contentLength);
 
-            if ((ranges == null) || (ranges.isEmpty())) {
+            if (ranges == null || ranges.isEmpty()) {
                 response.addHeader("Content-Range", "bytes */" + contentLength);
                 response.sendError(HttpServletResponse.SC_REQUESTED_RANGE_NOT_SATISFIABLE);
                 return;
@@ -71,54 +60,42 @@ public class Downloader {
             response.setStatus(HttpServletResponse.SC_PARTIAL_CONTENT);
 
             if (ranges.size() == 1) {
-                System.out.println(request.getMethod()+ " "+ranges.get(0));
+//                System.out.println(request.getMethod()+ " "+ranges.get(0));
                 Range range = ranges.get(0);
-                response.addHeader("Content-Range", "bytes "
-                        + range.start
-                        + "-" + range.end + "/"
-                        + range.length);
+                response.addHeader("Content-Range", "bytes " + range.start + "-" + range.end + "/" + range.length);
                 long length = range.end - range.start + 1;
                 response.setContentLength((int) length);
-
                 response.setHeader("Content-Disposition", "attachment;filename=\"" + file.getName() + "\"");
                 response.setContentType("application/octet-stream");
-
                 if (serveContent) {
-                    try {
-                        response.setBufferSize(RESPONSE_BUFFER_SIZE);
-                    } catch (IllegalStateException e) {
-                        // Silent catch
-                    }
-                    if (ostream != null) {
-                        dumpOneRange(new FileInputStream(file), ostream, range, callbackDownload);
-                    } else {
-                        // we should not get here
-                        throw new IllegalStateException();
-                    }
+                    configureBuffer(response);
+                    dumpOneRange(new FileInputStream(file), ostream, range, downloadHandler);
                 }
             } else {
-                System.out.println(request.getMethod()+ " "+ranges.get(0)+" ...");
+//                System.out.println(request.getMethod()+ " "+ranges.get(0)+" ...");
                 response.setHeader("Content-Disposition", "attachment;filename=\"" + file.getName() + "\"");
-                response.setContentType("multipart/byteranges; boundary="
-                        + mimeSeparation);
+                response.setContentType("multipart/byteranges; boundary=" + mimeSeparation);
                 if (serveContent) {
-                    try {
-                        response.setBufferSize(RESPONSE_BUFFER_SIZE);
-                    } catch (IllegalStateException e) {
-                        // Silent catch
-                    }
-                    if (ostream != null) {
-                        dumpMultipleRanges(new FileInputStream(file), ostream, ranges.iterator(), callbackDownload);
-                    } else {
-                        // we should not get here
-                        throw new IllegalStateException();
-                    }
+                    configureBuffer(response);
+                    dumpMultipleRanges(new FileInputStream(file), ostream, ranges.iterator(), downloadHandler);
                 }
             }
         }
     }
 
-    protected void dumpAll(InputStream is, OutputStream ostream, CallbackDownload callbackDownload)
+    private void configureFileNameHeader(HttpServletResponse response, File file) {
+        response.setHeader("Content-Disposition", "attachment;filename=\"" + file.getName() + "\"");
+    }
+
+    private void configureBuffer(HttpServletResponse response) {
+        try {
+            response.setBufferSize(RESPONSE_BUFFER_SIZE);
+        } catch (IllegalStateException e) {
+            // Silent catch
+        }
+    }
+
+    protected void dumpAll(InputStream is, OutputStream ostream, DownloadHandler downloadHandler)
             throws IOException {
 
         BufferedInputStream istream = new BufferedInputStream(is, INPUT_BUFFER_SIZE);
@@ -128,12 +105,12 @@ public class Downloader {
                 int len = istream.read(buffer);
                 if (len == -1) break;
                 ostream.write(buffer, 0, len);
-                if (!callbackDownload.download(len)) {
+                if (!downloadHandler.download(len)) {
                     throw new IOException("Cancelado por el admin o state no es download");
                 }
             }
         } catch (IOException e) {
-            callbackDownload.abort();
+            downloadHandler.abort();
         } finally {
             try {
                 istream.close();
@@ -151,18 +128,18 @@ public class Downloader {
      * @param range   Range the client wanted to retrieve
      * @throws IOException if an input/output error occurs
      */
-    protected void dumpOneRange(InputStream resourceInputStream, OutputStream ostream, Range range, CallbackDownload callbackDownload)
+    protected void dumpOneRange(InputStream resourceInputStream, OutputStream ostream, Range range, DownloadHandler downloadHandler)
             throws IOException {
 
         InputStream istream = new BufferedInputStream(resourceInputStream, INPUT_BUFFER_SIZE);
-        IOException exception = copyRange(istream, ostream, range.start, range.end, callbackDownload);
+        IOException exception = copyRange(istream, ostream, range.start, range.end, downloadHandler);
 
         // Clean up the input stream
         istream.close();
 
         // Rethrow any exception that has occurred
         if (exception != null) {
-            callbackDownload.abort();
+            downloadHandler.abort();
         }
     }
 
@@ -176,7 +153,7 @@ public class Downloader {
      *                retrieve
      * @throws IOException if an input/output error occurs
      */
-    protected void dumpMultipleRanges(InputStream resourceInputStream, OutputStream ostream, Iterator<Range> ranges, CallbackDownload callbackDownload)
+    protected void dumpMultipleRanges(InputStream resourceInputStream, OutputStream ostream, Iterator<Range> ranges, DownloadHandler downloadHandler)
             throws IOException {
 
         IOException exception = null;
@@ -190,7 +167,7 @@ public class Downloader {
                         "Content-Range: bytes " + currentRange.start + "-" + currentRange.end + "/" + currentRange.length + "\r\n\r\n";
                 ostream.write(mimeHeader.getBytes(Charset.forName("UTF8")));
                 // Printing content
-                exception = copyRange(istream, ostream, currentRange.start, currentRange.end, callbackDownload);
+                exception = copyRange(istream, ostream, currentRange.start, currentRange.end, downloadHandler);
                 istream.close();
             }
         }
@@ -199,7 +176,7 @@ public class Downloader {
         ostream.write(mimeHeader.getBytes(Charset.forName("UTF8")));
         // Rethrow any exception that has occurred
         if (exception != null) {
-            callbackDownload.abort();
+            downloadHandler.abort();
         }
     }
 
@@ -214,7 +191,7 @@ public class Downloader {
      * @param end     End of the range which will be copied
      * @return Exception which occurred during processing
      */
-    protected IOException copyRange(InputStream istream, OutputStream ostream, long start, long end, CallbackDownload callbackDownload) {
+    protected IOException copyRange(InputStream istream, OutputStream ostream, long start, long end, DownloadHandler downloadHandler) {
 
 //             log("Serving bytes:" + start + "-" + end);
 
@@ -239,13 +216,13 @@ public class Downloader {
                 len = istream.read(buffer);
                 if (bytesToRead >= len) {
                     ostream.write(buffer, 0, len);
-                    if (!callbackDownload.download(len)) {
+                    if (!downloadHandler.download(len)) {
                         throw new IOException("Cancelado por el admin o state no es download");
                     }
                     bytesToRead -= len;
                 } else {
                     ostream.write(buffer, 0, (int) bytesToRead);
-                    if (!callbackDownload.download(bytesToRead)) {
+                    if (!downloadHandler.download(bytesToRead)) {
                         throw new IOException("Cancelado por el admin o state no es download");
                     }
                     bytesToRead = 0;
@@ -263,8 +240,8 @@ public class Downloader {
     /**
      * Parse the range header.
      *
-     * @param rangeHeader  range header
-     * @param response The servlet response we are creating
+     * @param rangeHeader range header
+     * @param response    The servlet response we are creating
      * @return Vector of ranges
      */
     protected List<Range> parseRange(String rangeHeader, HttpServletResponse response,
@@ -329,11 +306,7 @@ public class Downloader {
 
         @Override
         public String toString() {
-            return "Range{" +
-                    "start=" + start +
-                    ", end=" + end +
-                    ", length=" + length +
-                    '}';
+            return "Range{" + "start=" + start + ", end=" + end + ", length=" + length + '}';
         }
 
         /**
@@ -346,11 +319,6 @@ public class Downloader {
             return start >= 0 && end >= 0 && start <= end && length > 0;
         }
 
-        public void recycle() {
-            start = 0;
-            end = 0;
-            length = 0;
-        }
     }
 }
 

@@ -8,12 +8,10 @@ import java.sql.Timestamp
 
 
 class DbLogic {
-    int cleanTimeoutMinutes = 60
     DataSource ds
 
-    DbLogic(DataSource ds, int cleanTimeoutMinutes) {
+    DbLogic(DataSource ds) {
         this.ds = ds
-        this.cleanTimeoutMinutes = cleanTimeoutMinutes
     }
 
     def withSql(Closure closure) {
@@ -29,7 +27,7 @@ class DbLogic {
         }
     }
 
-    int cleanTokens(int timeout = cleanTimeoutMinutes) {
+    int cleanTokens(int timeout) {
         long start = System.currentTimeMillis()
         int cleaned = 0
         withSql { Sql sql ->
@@ -49,7 +47,7 @@ class DbLogic {
     DbLogic.TokenOptions findTokenOptions(String token) {
         withSql { Sql sql ->
             GroovyRowResult row = sql.firstRow(
-                    "select fd.id, fd.user_id, fd.user_resource_id, u.slots, u.credits, fd.state, rf.local_path, rp.level as rLevel, u.level as uLevel " +
+                    "select fd.id, fd.user_id, fd.user_resource_id, u.slots, u.credits, fd.state, rf.local_path, rf.filename, rp.level as rLevel, u.level as uLevel " +
                             "from file_download fd " +
                             "inner join resource_pack rp on fd.resource_id = rp.id " +
                             "inner join resource_file rf on fd.resource_file_id = rf.id " +
@@ -57,7 +55,7 @@ class DbLogic {
                             "where fd.token = ?", [token])
             if (!row) return null
 
-            DbLogic.TokenOptions options = new DbLogic.TokenOptions(id: row.id, level: computeLevel(row.uLevel, row.rLevel), slots: row.slots, userResourceId: row.user_resource_id, userId: row.user_id, state: row.state, path: row.local_path)
+            DbLogic.TokenOptions options = new DbLogic.TokenOptions(id: row.id, level: computeLevel(row.uLevel, row.rLevel), slots: row.slots, userResourceId: row.user_resource_id, userId: row.user_id, state: row.state, file: new File(row.local_path), filename: row.filename)
 
             if (options.slots != null) {
                 GroovyRowResult queryDownloadsCount = sql.firstRow(
@@ -130,9 +128,30 @@ class DbLogic {
         Long userId
         Long slots
         String state
-        String path
+        File file
+        String filename
         int level = 0
+        int cps = 0
+        String cpsMsg = 0
         int currentDownloads = 0
+
+        String getFileSizeString() {
+            StringTools.humanReadableString(file.length())
+        }
+
+        String getETA() {
+            if (cps < 0) {
+                return "-"
+            }
+
+            int s = file.length() / cps;
+            if (s > 3600) {
+                return String.format("%dh %02dm %02ds", (int)(s / 3600), (int)((s % 3600) / 60), (int)(s % 60));
+            } else {
+                return String.format("%dm %ds", (int)((s % 3600) / 60), (int)(s % 60));
+            }
+
+        }
 
         boolean isSlotOverflow() {
             slots != null && currentDownloads >= slots

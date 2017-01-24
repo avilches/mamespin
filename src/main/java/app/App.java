@@ -36,7 +36,7 @@ public class App implements LifeCycle.Listener {
     Conf conf;
 
     public static void main(String[] args) throws Exception {
-        final int port = args.length > 0 ? Integer.parseInt(args[0]) : 7070 /* TODO: configurable*/;
+        final int port = args.length > 0 ? Integer.parseInt(args[0]) : -1;
         new App(port).start();
     }
 
@@ -49,26 +49,45 @@ public class App implements LifeCycle.Listener {
 
         conf = new Conf();
         conf.load("/Users/avilches/.grails/mamespin-common-config.groovy"); // TODO: parametro
+        conf.load("/Users/avilches/.grails/filesrv-config.groovy"); // TODO: parametro
 
         ds = new HikariDataSource();
-        /* TODO: configurable*/
-        ds.setJdbcUrl("jdbc:mysql://localhost:3306/mamespin?useUnicode=true&characterEncoding=UTF-8");
-        ds.setUsername("root");
-        ds.setPassword("");
+        ds.setJdbcUrl(conf.getDataSourceProperty("url").toString());
+        ds.setUsername(conf.getDataSourceProperty("username").toString());
+        ds.setPassword(conf.getDataSourceProperty("password").toString());
+        ds.setConnectionTimeout((int)conf.getDataSourceProperty("hikari.connectionTimeout"));
+        ds.setConnectionInitSql(conf.getDataSourceProperty("hikari.connectionInitSql").toString());
+        ds.setMaximumPoolSize((int)conf.getDataSourceProperty("hikari.maximumPoolSize"));
+        ds.setMinimumIdle((int)conf.getDataSourceProperty("hikari.minimumIdle"));
+        ds.setMaxLifetime((int)conf.getDataSourceProperty("hikari.maxLifetime"));
+
+        port = port > 0 ? port : conf.getServerPort();
 
         downloader = new Downloader();
         renderer = new Renderer().init("/templates");
         resources = new Resources();
         tokenLogic = new TokenLogic();
-        tokenLogic.dbLogic = new DbLogic(ds, 2 /* TODO: configurable*/);
+        tokenLogic.dbLogic = new DbLogic(ds);
         tokenLogic.jedis = jedis;
         tokenLogic.ds = ds;
 
         // jedis = new Jedis("localhost");
 
-
+        // TODO: si hay varios servidores sirviendo, se debe guardar el id del servidor en la tabla file_download y cada servidor
+        // solo debe borrar sus propias peticiones perdidas. Tal y como esta ahora se borrarian las de todos
         tokenLogic.dbLogic.cleanTokens(0);
 
+        ServletContextHandler ctx = createContext(conf.getVirtualHost(), "/");
+        createDownloadServlet(ctx, "/download/*");
+        createStaticResourcesServlet(ctx, "/static/*", "/static");
+
+
+        server = new Server(port);
+        server.addLifeCycleListener(this);
+        server.setHandler(ctx);
+        server.start();
+
+        System.out.println("Scheduling cleaner. Initial delay: "+conf.getCleanerDelay()+"min. Every: "+conf.getCleanerPeriod()+"min");
         new Timer().scheduleAtFixedRate(new TimerTask() {
             AtomicBoolean busy = new AtomicBoolean(false);
             @Override
@@ -79,26 +98,16 @@ public class App implements LifeCycle.Listener {
 
                     // TODO: si hay varios servidores sirviendo, se debe guardar el id del servidor en la tabla file_download y cada servidor
                     // solo debe borrar sus propias peticiones perdidas. Tal y como esta ahora se borrarian las de todos
-                    tokenLogic.dbLogic.cleanTokens();
+                    tokenLogic.dbLogic.cleanTokens(conf.getCleanerTimeout());
                 } catch(Exception e) {
                     e.printStackTrace(System.err);
                 } finally {
                     busy.set(false);
                 }
             }
-        }, TimeUnit.MINUTES.toMillis(1 /*TODO: configurable */),
-            TimeUnit.MINUTES.toMillis(1 /*TODO: configurable */));
+        }, TimeUnit.MINUTES.toMillis(conf.getCleanerDelay()),
+           TimeUnit.MINUTES.toMillis(conf.getCleanerPeriod()));
 
-
-        ServletContextHandler ctx = createContext("mamespin-download.com" /* TODO: configurable*/, "/");
-        createDownloadServlet(ctx, "/download/*");
-        createStaticResourcesServlet(ctx, "/static/*", "/static");
-
-
-        server = new Server(port);
-        server.addLifeCycleListener(this);
-        server.setHandler(ctx);
-        server.start();
         server.join();
     }
 
@@ -117,6 +126,7 @@ public class App implements LifeCycle.Listener {
         servlet.renderer = renderer;
         servlet.tokenLogic = tokenLogic;
         servlet.cpss = conf.loadCps();
+        servlet.cpsMsgs = conf.loadCpsMsgs();
 
         ServletHolder holder = new ServletHolder(servlet);
         holder.setInitOrder(0);

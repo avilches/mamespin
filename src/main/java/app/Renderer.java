@@ -22,11 +22,18 @@ public class Renderer {
         cfg.setDefaultEncoding("UTF-8");
         cfg.setTemplateExceptionHandler(TemplateExceptionHandler.RETHROW_HANDLER);
         cfg.setLogTemplateExceptions(false);
+        cfg.setTemplateUpdateDelay(0);
         return this;
     }
 
     public void render(PrintWriter writer, String template) throws IOException {
         cfg.getTemplate(template+".ftl").dump(writer);
+    }
+
+    public void render(PrintWriter writer, String template, String key, Object value) throws IOException, TemplateException {
+        Map<String, Object> model = new HashMap<>(1);
+        model.put(key, value);
+        cfg.getTemplate(template+".ftl").process(model, writer);
     }
 
     public void render(PrintWriter writer, String template, String message) throws IOException, TemplateException {

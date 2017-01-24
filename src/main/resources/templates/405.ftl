@@ -1,6 +1,6 @@
 <html>
 <body>
-<h1>500: Server Unavailable</h1>
+<h1>405: Method Not allowed</h1>
 <p>${message}</p>
 </body>
 </html>

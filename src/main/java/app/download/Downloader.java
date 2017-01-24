@@ -23,7 +23,8 @@ public class Downloader {
 
     public void serve(HttpServletRequest request,
                       HttpServletResponse response,
-                      File file, int cps, boolean allowRanges, DownloadHandler downloadHandler)
+                      File file, String filename,
+                      int cps, boolean allowRanges, DownloadHandler downloadHandler)
             throws IOException, ServletException {
 
         long contentLength = file.length();
@@ -38,7 +39,7 @@ public class Downloader {
         if (rangeHeader == null) {
             // System.out.println(request.getMethod());
             // Set the appropriate output headers
-            configureFileNameHeader(response, file);
+            configureFileNameHeader(response, filename);
             response.setContentType("application/octet-stream");
             response.setContentLength((int) contentLength);
 
@@ -65,7 +66,7 @@ public class Downloader {
                 response.addHeader("Content-Range", "bytes " + range.start + "-" + range.end + "/" + range.length);
                 long length = range.end - range.start + 1;
                 response.setContentLength((int) length);
-                response.setHeader("Content-Disposition", "attachment;filename=\"" + file.getName() + "\"");
+                configureFileNameHeader(response, filename);
                 response.setContentType("application/octet-stream");
                 if (serveContent) {
                     configureBuffer(response);
@@ -73,7 +74,7 @@ public class Downloader {
                 }
             } else {
 //                System.out.println(request.getMethod()+ " "+ranges.get(0)+" ...");
-                response.setHeader("Content-Disposition", "attachment;filename=\"" + file.getName() + "\"");
+                configureFileNameHeader(response, filename);
                 response.setContentType("multipart/byteranges; boundary=" + mimeSeparation);
                 if (serveContent) {
                     configureBuffer(response);
@@ -83,8 +84,8 @@ public class Downloader {
         }
     }
 
-    private void configureFileNameHeader(HttpServletResponse response, File file) {
-        response.setHeader("Content-Disposition", "attachment;filename=\"" + file.getName() + "\"");
+    private void configureFileNameHeader(HttpServletResponse response, String filename) {
+        response.setHeader("Content-Disposition", "attachment;filename=\"" + filename + "\"");
     }
 
     private void configureBuffer(HttpServletResponse response) {

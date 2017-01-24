@@ -112,12 +112,16 @@ class DbLogic {
     private int updateUserResourceState(Sql sql, long userResourceId) {
         int pending = sql.firstRow("select count(id) count from file_download fd where fd.user_resource_id = ? and fd.state <> 'finished'", [userResourceId]).count
         if (pending == 0) {
+            // No hay ninguno pendiente = estan todos finished = marcamos el user_resource como finished
             return sql.executeUpdate("update user_resource ur set ur.state = 'finished', ur.finished = ? where id = ?", [new Date(), userResourceId])
         }
+        // Hay pendientes (alguno unlocked, alguno download)
         int downs = sql.firstRow("select count(id) count from file_download fd where fd.user_resource_id = ? and fd.state = 'download'", [userResourceId]).count
         if (downs == 0) {
+            // No hay ninguno bajandose, todos son pendientes, marcamos la descarga como pendiente (probablmente se hayan cancelado todas las descargas)
             return sql.executeUpdate("update user_resource ur set ur.state = 'unlocked', ur.finished = ? where id = ?", [new Date(), userResourceId])
         }
+        return 0
     }
 
     static class TokenOptions {

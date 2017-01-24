@@ -4,8 +4,6 @@
 */
 package app.download;
 
-import app.download.CPSPauser;
-
 import java.io.FilterOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -14,39 +12,45 @@ import java.io.OutputStream;
  *
  */
 public class SlowOutputStream extends FilterOutputStream {
-    private final CPSPauser pauser;
-    int total = 0;
-    public static final int LIMIT_TO_PAUSE = 10000;
+
+    static long CHECK_EVERY_MILLIS = 10; // chequeo cada 10 millis
+
+    int cps = -1;
     /**
      * Create wrapped Output Stream toe emulate the requested CPS.
      * @param out OutputStream
-     * @param pauser characters per second
      */
-    public SlowOutputStream(OutputStream out, CPSPauser pauser) {
+    public SlowOutputStream(OutputStream out, int cps) {
         super(out);
-        this.pauser = pauser;
+        this.cps = cps;
     }
-    // Also handles write(byte[])
+
+    long timeStart = 0;
+    long timeLastCheck = 0;
+    long written = 0;
     @Override
     public void write(byte[] b, int off, int len) throws IOException {
-        if (pauser != null) {
-            total += len;
-            if (total > LIMIT_TO_PAUSE) {
-                pauser.pause(total);
-                total = 0;
-            }
-        }
         out.write(b, off, len);
-    }
-    @Override
-    public void write(int b) throws IOException {
-        if (pauser != null) {
-            total += 1;
-            if (total > LIMIT_TO_PAUSE) {
-                pauser.pause(total);
-                total = 0;
+        if (cps < 0) return; // -1 = no limit
+        written += len;
+        if (timeStart == 0) {
+            timeStart = timeLastCheck = System.currentTimeMillis();
+            return;
+        }
+        long now = System.currentTimeMillis();
+        if (now - timeLastCheck < CHECK_EVERY_MILLIS) return;
+        // Chequeamos
+        long writtenTimeMillisTheorical = (written * 1000) / cps;
+        long writtenTimeMillisReal = now - timeStart;
+//        System.out.println("Chequeo "+now+", lastCheck: "+lastCheck+", elapsed check: "+(now - lastCheck )+ "-> total "+total+"*1000 / cps:"+pauser.cps+", millisTheory:"+writtenTimeMillisTheorical+", started: "+start+", writtenTimeMillisReal: "+writtenTimeMillisReal);
+        if (writtenTimeMillisTheorical > writtenTimeMillisReal) {
+            try {
+                System.out.println("    Pause "+(writtenTimeMillisTheorical-writtenTimeMillisReal)+" millis");
+                Thread.sleep(writtenTimeMillisTheorical - writtenTimeMillisReal);
+            } catch (InterruptedException e) {
             }
         }
-        out.write(b);
+        timeLastCheck = now;
     }
+
 }

@@ -23,7 +23,7 @@ public class Downloader {
 
     public void serve(HttpServletRequest request,
                HttpServletResponse response,
-               File file, CPSPauser pauser, boolean allowRanges, CallbackDownload callbackDownload)
+               File file, int cps, boolean allowRanges, CallbackDownload callbackDownload)
             throws IOException, ServletException {
 
         long contentLength = file.length();
@@ -37,7 +37,7 @@ public class Downloader {
 
         if (serveContent) {
             try {
-                ostream = new SlowOutputStream(response.getOutputStream(), pauser);
+                ostream = new SlowOutputStream(response.getOutputStream(), cps);
             } catch (IllegalStateException e) {
             }
         }

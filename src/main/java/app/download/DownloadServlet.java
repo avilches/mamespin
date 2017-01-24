@@ -22,7 +22,7 @@ public class DownloadServlet implements Servlet {
     public Renderer renderer;
     public TokenLogic tokenLogic;
 
-    public CPSPauser[] levels;
+    public int[] cpss;
 
     public void init(ServletConfig config) throws ServletException {
     }
@@ -65,9 +65,12 @@ public class DownloadServlet implements Servlet {
                 } else {
 //                    info(request, response.getStatus(), "...");
                     CallbackDownload callback = new CallbackDownload(tokenLogic, resp, file.length());
-                    CPSPauser pauser = levels[Math.max(0, Math.min(resp.getLevel(), levels.length - 1))];
-                    downloader.serve(request, response, file, pauser, false /* TODO: rangos. Ilimitado: ignorar validaciones slots/bajado/bajandose. Limitado: validar para solo dejar resumir */, callback);
-                    info(request, response.getStatus(), callback.accumulated+"/"+file.length()+" END");
+                    int cps = cpss[Math.max(0, Math.min(resp.getLevel(), cpss.length - 1))];
+                    downloader.serve(request, response, file, cps, false /* TODO: rangos. Ilimitado: ignorar validaciones slots/bajado/bajandose. Limitado: validar para solo dejar resumir */, callback);
+                    long elapsed = System.currentTimeMillis() - start;
+                    long KBs = file.length() / elapsed;
+
+                    info(request, response.getStatus(), callback.accumulated+"/"+file.length()+". Speed: "+KBs+" KB/s");
                 }
             }
 

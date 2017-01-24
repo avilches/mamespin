@@ -32,7 +32,6 @@ public class CallbackDownload {
         started = true;
         tokenLogic.start(tokenOptions.getId(), start, totalSize);
     }
-
     private void finish() {
         System.out.println("[finish] "+tokenOptions.getId()+" 100% ("+accumulated+"/"+totalSize+")");
         tokenLogic.finish(tokenOptions.getId(), tokenOptions.getUserResourceId(), start, new Date(), accumulated);
@@ -63,7 +62,7 @@ public class CallbackDownload {
 //        System.out.println("Written +"+written+"="+accumulated+", Last percent "+lastPercent+", current percent "+percent+", diff "+diff);
         if (diff >= 1) {
             lastPercent = percent;
-            System.out.println("[downloading] "+tokenOptions.getId()+" "+percent+"% ("+accumulated+"/"+totalSize+")");
+//            System.out.println("[downloading] "+tokenOptions.getId()+" "+percent+"% ("+accumulated+"/"+totalSize+")");
             return tokenLogic.downloading(accumulated, new Date(), tokenOptions.getId());
         }
         return true;

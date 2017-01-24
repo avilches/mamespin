@@ -4,7 +4,6 @@
 */
 package app;
 
-import app.download.CPSPauser;
 import app.download.DownloadServlet;
 import app.download.Downloader;
 import app.download.TokenLogic;
@@ -34,6 +33,7 @@ public class App implements LifeCycle.Listener {
     Jedis jedis;
     HikariDataSource ds;
     TokenLogic tokenLogic;
+    Conf conf;
 
     public static void main(String[] args) throws Exception {
         final int port = args.length > 0 ? Integer.parseInt(args[0]) : 7070 /* TODO: configurable*/;
@@ -46,6 +46,9 @@ public class App implements LifeCycle.Listener {
 
     private void start() throws Exception {
         start = System.currentTimeMillis();
+
+        conf = new Conf();
+        conf.load("/Users/avilches/.grails/mamespin-common-config.groovy"); // TODO: parametro
 
         ds = new HikariDataSource();
         /* TODO: configurable*/
@@ -113,15 +116,7 @@ public class App implements LifeCycle.Listener {
         servlet.downloader = downloader;
         servlet.renderer = renderer;
         servlet.tokenLogic = tokenLogic;
-        CPSPauser[] levels = new CPSPauser[7];
-        levels[0] = CPSPauser.createInKBs(100);
-        levels[1] = CPSPauser.createInKBs(200);
-        levels[2] = CPSPauser.createInKBs(400);
-        levels[3] = CPSPauser.createInKBs(800);
-        levels[4] = CPSPauser.createInKBs(1000);
-        levels[5] = CPSPauser.createInKBs(2000);
-        levels[6] = null;
-        servlet.levels = levels;
+        servlet.cpss = conf.loadCps();
 
         ServletHolder holder = new ServletHolder(servlet);
         holder.setInitOrder(0);

@@ -4,7 +4,7 @@
 */
 package app;
 
-import app.download.DownloadServlet;
+import app.download.TokenServlet;
 import app.download.Downloader;
 import app.download.TokenLogic;
 import com.zaxxer.hikari.HikariDataSource;
@@ -121,7 +121,7 @@ public class App implements LifeCycle.Listener {
     }
 
     private void createDownloadServlet(ServletContextHandler rootContext, String path) {
-        DownloadServlet servlet = new DownloadServlet();
+        TokenServlet servlet = new TokenServlet();
         servlet.downloader = downloader;
         servlet.renderer = renderer;
         servlet.tokenLogic = tokenLogic;

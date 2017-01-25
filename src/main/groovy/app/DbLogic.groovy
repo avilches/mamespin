@@ -2,6 +2,7 @@ package app
 
 import groovy.sql.GroovyRowResult
 import groovy.sql.Sql
+import tools.StringTools
 
 import javax.sql.DataSource
 import java.sql.Timestamp
@@ -55,13 +56,11 @@ class DbLogic {
                             "where fd.token = ?", [token])
             if (!row) return null
 
-            DbLogic.TokenOptions options = new DbLogic.TokenOptions(id: row.id, level: computeLevel(row.uLevel, row.rLevel), slots: row.slots, userResourceId: row.user_resource_id, userId: row.user_id, state: row.state, file: new File(row.local_path), filename: row.filename)
+            DbLogic.TokenOptions options = new DbLogic.TokenOptions(token: token, id: row.id, level: computeLevel(row.uLevel, row.rLevel), slots: row.slots, userResourceId: row.user_resource_id, userId: row.user_id, state: row.state, file: new File(row.local_path), filename: row.filename)
 
-            if (options.slots != null) {
-                GroovyRowResult queryDownloadsCount = sql.firstRow(
-                        "select count(id) as c from file_download where user_id = ? and state = 'download'", [options.userId])
-                options.currentDownloads = queryDownloadsCount.c
-            }
+            GroovyRowResult queryDownloadsCount = sql.firstRow(
+                    "select count(id) as c from file_download where user_id = ? and state = 'download'", [options.userId])
+            options.currentDownloads = queryDownloadsCount.c
             return options
         }
     }
@@ -130,6 +129,7 @@ class DbLogic {
         String state
         File file
         String filename
+        String token
         int level = 0
         int cps = 0
         String cpsMsg = 0

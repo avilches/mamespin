@@ -16,15 +16,17 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
-public class DownloadServlet implements Servlet {
+public class TokenServlet implements Servlet {
     public Downloader downloader;
     public Renderer renderer;
     public TokenLogic tokenLogic;
 
     public int[] cpss;
     public String[] cpsMsgs;
+    public ConcurrentHashMap liveTokens = new ConcurrentHashMap();
 
     public void init(ServletConfig config) throws ServletException {
     }
@@ -60,61 +62,80 @@ public class DownloadServlet implements Servlet {
         }
     }
 
+
     private void validateThenExecute(HttpServletRequest request, HttpServletResponse response) throws IOException, TemplateException, ServletException {
-        if (request.getRequestURI().length() < 50) {
-            notFound(request, response, "Token incorrecto [subcode:0]");
-            return;
-        }
-        String token = request.getRequestURI().substring(10); // request.getParameter("token");
+        DbLogic.TokenOptions tokenOptions = null;
+        try {
+            if (request.getRequestURI().length() < 50) {
+                notFound(request, response, "Token incorrecto [subcode:0]");
+                return;
+            }
+            String token = request.getRequestURI().substring(10); // request.getParameter("token");
 
-        DbLogic.TokenOptions tokenOptions = tokenLogic.checkToken(token, request.getRemoteAddr());
-        if (tokenOptions == null) {
-            notFound(request, response, "Token incorrecto [subcode:1]");
-            return;
-        }
+            tokenOptions = tokenLogic.checkToken(token, request.getRemoteAddr());
+            if (tokenOptions == null) {
+                notFound(request, response, "Token incorrecto [subcode:1]");
+                return;
+            }
+            tokenOptions.setCps(getCPSFromLevel(tokenOptions.getLevel()));
+            tokenOptions.setCpsMsg(getCPSMsgFromLevel(tokenOptions.getLevel()));
 
-        tokenOptions.setCps(getCPSFromLevel(tokenOptions.getLevel()));
-        tokenOptions.setCpsMsg(getCPSMsgFromLevel(tokenOptions.getLevel()));
+            register(tokenOptions);
 
-        String method = request.getMethod().toLowerCase();
+            String method = request.getMethod().toLowerCase();
 
-        if (!method.equals("get") && !method.equals("head")) {
-            notAllowed(request, response, "Metodo no permitido");
-            return;
-        }
-
-        boolean isGet = method.equals("get");
-        if (isGet) {
-
-            if (request.getParameter("info") != null) {
-                showInfo(request, response, tokenOptions);
+            if (!method.equals("get") && !method.equals("head")) {
+                notAllowed(request, response, "Metodo no permitido");
                 return;
             }
 
-            // Solo se validan los get
-            if (tokenOptions.isDownloading()) {
-                notFound(request, response, "Token incorrecto [subcode:2]");
+            boolean isGet = method.equals("get");
+            if (isGet) {
+
+                if (request.getParameter("info") != null) {
+                    showInfo(request, response, tokenOptions);
+                    return;
+                }
+
+                // Solo se validan los get
+                if (tokenOptions.isDownloading()) {
+                    notFound(request, response, "Token incorrecto [subcode:2]");
 //                        forbidden(request, response, "Te estás bajando este fichero ahora mismo");
-                return;
+                    return;
 
-            } else if (tokenOptions.isFinished()) {
-                notFound(request, response, "Token incorrecto [subcode:3]");
+                } else if (tokenOptions.isFinished()) {
+                    notFound(request, response, "Token incorrecto [subcode:3]");
 //                        forbidden(request, response, "Ya te has bajado este fichero. Si necesitas descargarlo otra vez debes generar un nuevo enlace.");
-                return;
+                    return;
 
-            } else if (tokenOptions.isSlotOverflow()) {
-                forbidden(request, response, "No tienes slots libres para iniciar esta descarga.");
+                } else if (tokenOptions.isSlotOverflow()) {
+                    forbidden(request, response, "No tienes slots libres para iniciar esta descarga.");
+                    return;
+                }
+            }
+
+
+            if (!tokenOptions.getFile().exists() || tokenOptions.getFile().length() == 0) {
+                notFound(request, response, "Local file not found in path");
                 return;
             }
+
+            executeDownload(request, response, tokenOptions);
+        } finally {
+            unregister(tokenOptions);
         }
+    }
 
+    private void unregister(DbLogic.TokenOptions tokenOptions) {
+        if (tokenOptions == null) return;
+        // TODO: si metemos rangos y se permite descargar a la vez el mismo token (con cada uno un rango) esto no va a funcionar
+        // TODO: posible solucion solo meter como live el primer rango...
 
-        if (!tokenOptions.getFile().exists() || tokenOptions.getFile().length() == 0) {
-            notFound(request, response, "Local file not found in path");
-            return;
-        }
+//        liveTokens.remove(tokenOptions.getId());
+    }
 
-        executeDownload(request, response, tokenOptions);
+    private void register(DbLogic.TokenOptions tokenOptions) {
+//        liveTokens.put(tokenOptions.getId(), tokenOptions);
     }
 
     private void executeDownload(HttpServletRequest request, HttpServletResponse response, DbLogic.TokenOptions tokenOptions) throws IOException, ServletException {
@@ -163,25 +184,25 @@ public class DownloadServlet implements Servlet {
     }
 
     private void notFound(HttpServletRequest request, HttpServletResponse response, String message) throws IOException, TemplateException {
-        response.sendError(HttpServletResponse.SC_NOT_FOUND, message);
+        response.setStatus(HttpServletResponse.SC_NOT_FOUND);
         info(request, response.getStatus(), message);
         renderer.render(new PrintWriter(response.getOutputStream()), "404", message);
     }
 
     private void forbidden(HttpServletRequest request, HttpServletResponse response, String message) throws IOException, TemplateException {
-        response.sendError(HttpServletResponse.SC_FORBIDDEN, message);
+        response.setStatus(HttpServletResponse.SC_FORBIDDEN);
         info(request, response.getStatus(), message);
         renderer.render(new PrintWriter(response.getOutputStream()), "403", message);
     }
 
     private void notAllowed(HttpServletRequest request, HttpServletResponse response, String message) throws IOException, TemplateException {
-        response.sendError(HttpServletResponse.SC_METHOD_NOT_ALLOWED, message);
+        response.setStatus(HttpServletResponse.SC_METHOD_NOT_ALLOWED);
         info(request, response.getStatus(), message);
         renderer.render(new PrintWriter(response.getOutputStream()), "405", message);
     }
 
     private void serverError(HttpServletRequest request, HttpServletResponse response, String message) throws IOException, TemplateException {
-        response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, message);
+        response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
         info(request, response.getStatus(), message);
         renderer.render(new PrintWriter(response.getOutputStream()), "500", message);
     }

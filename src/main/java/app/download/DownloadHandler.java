@@ -5,6 +5,7 @@
 package app.download;
 
 import app.DbLogic;
+import org.eclipse.jetty.server.Server;
 
 import java.util.Date;
 
@@ -20,7 +21,10 @@ public class DownloadHandler {
     long totalSize;
     Date start;
 
-    public DownloadHandler(TokenLogic tokenLogic, DbLogic.TokenOptions tokenOptions, long totalSize) {
+    Server server;
+
+    public DownloadHandler(Server server, TokenLogic tokenLogic, DbLogic.TokenOptions tokenOptions, long totalSize) {
+        this.server = server;
         this.tokenLogic = tokenLogic;
         this.tokenOptions = tokenOptions;
         this.totalSize = totalSize;
@@ -33,6 +37,10 @@ public class DownloadHandler {
     long totalWritten = 0;
 
     boolean download(long written) {
+        if (!server.isRunning()) {
+            System.out.println("[shutdown] "+tokenOptions.getId()+" ("+ totalWritten +"/"+totalSize+")!!!!");
+            return false;
+        }
         if (start == null) {
             start = new Date();
         }
@@ -55,6 +63,7 @@ public class DownloadHandler {
             started = true;
             lastCheck = System.currentTimeMillis();
             System.out.println("[start] "+tokenOptions.getId()+" ("+ totalWritten +"/"+totalSize+")");
+            // Si devuelve false se para la conexion, significa que no existe file_download y no ha podido ser actualizado, lo cual es muy improbable
             return tokenLogic.start(tokenOptions.getId(), start, totalSize);
         } else {
             // Update downloading
@@ -67,6 +76,7 @@ public class DownloadHandler {
                 lastPercent = percent;
                 lastCheck = now;
                 System.out.println("[downloading] reason("+elapsedSinceLastCheck+"millis "+percentDiffSinceLastCheck+"% diff) - download id:" + tokenOptions.getId() + " = " + percent + "% (" + totalWritten + "/" + totalSize + ")");
+                // Si devuelve false se para la conexion, significa que no existe file_download y no ha podido ser actualizado, lo cual es muy improbable
                 return tokenLogic.downloading(totalWritten, new Date(), tokenOptions.getId());
             }
         }

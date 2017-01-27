@@ -4,11 +4,14 @@
 */
 package app;
 
+import app.download.MngServlet;
 import app.download.TokenServlet;
 import app.download.Downloader;
 import app.download.TokenLogic;
 import com.zaxxer.hikari.HikariDataSource;
+import org.eclipse.jetty.server.LowResourceMonitor;
 import org.eclipse.jetty.server.Server;
+import org.eclipse.jetty.server.handler.StatisticsHandler;
 import org.eclipse.jetty.servlet.DefaultServlet;
 import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.servlet.ServletHolder;
@@ -23,33 +26,34 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 public class App implements LifeCycle.Listener {
 
-    long start;
-    int port;
-    String vhost;
-    Server server;
-    Downloader downloader;
-    Renderer renderer;
-    Resources resources;
-    Jedis jedis;
-    HikariDataSource ds;
-    TokenLogic tokenLogic;
-    Conf conf;
+    public StatisticsHandler stats;
+    public LowResourceMonitor lowResourcesMonitor;
+    public long start;
+    public int port;
+    public String vhost;
+    public Server server;
+    public Downloader downloader;
+    public Renderer renderer;
+    public Resources resources;
+    public Jedis jedis;
+    public HikariDataSource ds;
+    public TokenLogic tokenLogic;
+    public Conf conf;
 
     public static void main(String[] args) throws Exception {
-        final int port = args.length > 0 ? Integer.parseInt(args[0]) : -1;
-        new App(port).start();
+        String folder = args.length > 0 ? args[0] : "/srv/mamespin/config";
+        new App().start(folder);
     }
 
-    public App(int port) {
-        this.port = port;
+    public App() {
     }
 
-    private void start() throws Exception {
+    private void start(String configFolder) throws Exception {
         start = System.currentTimeMillis();
 
         conf = new Conf();
-        conf.load("/Users/avilches/.grails/mamespin-common-config.groovy"); // TODO: parametro
-        conf.load("/Users/avilches/.grails/filesrv-config.groovy"); // TODO: parametro
+        conf.load(configFolder+"/mamespin-common-config.groovy");
+        conf.load(configFolder+"/filesrv-config.groovy");
 
         ds = new HikariDataSource();
         ds.setJdbcUrl(conf.getDataSourceProperty("url").toString());
@@ -61,7 +65,8 @@ public class App implements LifeCycle.Listener {
         ds.setMinimumIdle((int)conf.getDataSourceProperty("hikari.minimumIdle"));
         ds.setMaxLifetime((int)conf.getDataSourceProperty("hikari.maxLifetime"));
 
-        port = port > 0 ? port : conf.getServerPort();
+        port = conf.getServerPort();
+        server = new Server(port);
 
         downloader = new Downloader();
         renderer = new Renderer().init("/templates");
@@ -79,12 +84,28 @@ public class App implements LifeCycle.Listener {
 
         ServletContextHandler ctx = createContext(conf.getVirtualHost(), "/");
         createDownloadServlet(ctx, "/download/*");
+        createMngServlet(ctx, "/mng/*");
         createStaticResourcesServlet(ctx, "/static/*", "/static");
 
 
-        server = new Server(port);
+        server.setStopAtShutdown(true);
         server.addLifeCycleListener(this);
-        server.setHandler(ctx);
+
+
+        stats = new StatisticsHandler();
+        stats.setHandler(ctx);
+        server.setHandler(stats);
+
+
+        lowResourcesMonitor=new LowResourceMonitor(server);
+        lowResourcesMonitor.setPeriod(1000);
+        lowResourcesMonitor.setLowResourcesIdleTimeout(200);
+        lowResourcesMonitor.setMonitorThreads(true);
+        lowResourcesMonitor.setMaxConnections(0);
+        lowResourcesMonitor.setMaxMemory(0);
+        lowResourcesMonitor.setMaxLowResourcesTime(5000);
+        server.addBean(lowResourcesMonitor);
+
         server.start();
 
         System.out.println("Scheduling cleaner. Initial delay: "+conf.getCleanerDelay()+"min. Every: "+conf.getCleanerPeriod()+"min");
@@ -93,7 +114,7 @@ public class App implements LifeCycle.Listener {
             @Override
             public void run() {
                 try {
-                    if (busy.get()) return;
+                    if (!server.isRunning() || busy.get()) return;
                     busy.set(true);
 
                     // TODO: si hay varios servidores sirviendo, se debe guardar el id del servidor en la tabla file_download y cada servidor
@@ -120,8 +141,18 @@ public class App implements LifeCycle.Listener {
         return ctx;
     }
 
+    private void createMngServlet(ServletContextHandler rootContext, String path) {
+        MngServlet servlet = new MngServlet();
+        servlet.app = this;
+
+        ServletHolder holder = new ServletHolder(servlet);
+        holder.setInitOrder(0);
+        rootContext.addServlet(holder, path);
+    }
+
     private void createDownloadServlet(ServletContextHandler rootContext, String path) {
         TokenServlet servlet = new TokenServlet();
+        servlet.server = server;
         servlet.downloader = downloader;
         servlet.renderer = renderer;
         servlet.tokenLogic = tokenLogic;
@@ -141,7 +172,7 @@ public class App implements LifeCycle.Listener {
         holder.setInitParameter("dirAllowed","false");
         holder.setInitParameter("pathInfoOnly","true");
         holder.setInitParameter("gzip","true");
-        rootContext.addServlet(holder,publicPath);
+        rootContext.addServlet(holder, publicPath);
     }
 
     @Override
@@ -162,12 +193,13 @@ public class App implements LifeCycle.Listener {
 
     @Override
     public void lifeCycleStopping(LifeCycle event) {
-        System.out.println("Stopping :" + (System.currentTimeMillis() - start));
+        System.out.println("Stopping...");
     }
 
     @Override
     public void lifeCycleStopped(LifeCycle event) {
-        System.out.println("Stopped :" + (System.currentTimeMillis() - start));
+        long s = (System.currentTimeMillis() - start)/1000;
+        System.out.println("Stopped! Live " + String.format("%dh %02dm %02ds", (int)(s / 3600), (int)((s % 3600) / 60), (int)(s % 60)));
     }
 
 

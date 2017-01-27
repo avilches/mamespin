@@ -7,6 +7,7 @@ package app.download;
 import app.DbLogic;
 import app.Renderer;
 import freemarker.template.TemplateException;
+import org.eclipse.jetty.server.Server;
 
 import javax.servlet.*;
 import javax.servlet.http.HttpServletRequest;
@@ -23,6 +24,7 @@ public class TokenServlet implements Servlet {
     public Downloader downloader;
     public Renderer renderer;
     public TokenLogic tokenLogic;
+    public Server server;
 
     public int[] cpss;
     public String[] cpsMsgs;
@@ -70,7 +72,7 @@ public class TokenServlet implements Servlet {
                 notFound(request, response, "Token incorrecto [subcode:0]");
                 return;
             }
-            String token = request.getRequestURI().substring(10); // request.getParameter("token");
+            String token = request.getRequestURI().substring(10); // "/download/"
 
             tokenOptions = tokenLogic.checkToken(token, request.getRemoteAddr());
             if (tokenOptions == null) {
@@ -141,7 +143,7 @@ public class TokenServlet implements Servlet {
     private void executeDownload(HttpServletRequest request, HttpServletResponse response, DbLogic.TokenOptions tokenOptions) throws IOException, ServletException {
 //        info(request, response.getStatus(), "...");
         File file = tokenOptions.getFile();
-        DownloadHandler callback = new DownloadHandler(tokenLogic, tokenOptions, file.length());
+        DownloadHandler callback = new DownloadHandler(server, tokenLogic, tokenOptions, file.length());
         downloader.serve(request, response, file, tokenOptions.getFilename(), tokenOptions.getCps(), false /* TODO: rangos. Ilimitado: ignorar validaciones slots/bajado/bajandose. Limitado: validar para solo dejar resumir */, callback);
         long start = (long) request.getAttribute("start");
         long elapsed = System.currentTimeMillis() - start;

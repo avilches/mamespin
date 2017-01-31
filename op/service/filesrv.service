@@ -1,0 +1,12 @@
+[Unit]
+Description=filesrv
+After=syslog.target
+
+[Service]
+User=avilches
+ExecStart=/srv/mamespin/bin/filesrv.sh start
+ExecStop=/srv/mamespin/bin/filesrv.sh stop
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -1,46 +1,69 @@
 #!/bin/sh
 
-# TODO: falta meter script de arranque, JVM OPTIONS
-
-
 SERVICE_NAME=filesrv
 PATH_TO_JAR=/srv/mamespin/bin/filesrv.jar
-PID_PATH_NAME=/srv/mamespin/bin/filesrv.pid
-LOG_PATH=/srv/mamespin/log
+JVM_PARAMS="-Xms256m -Xmx512m -Djava.awt.headless=true"
+APP_PARAMS="/srv/mamespin/config"
+LOG_PATH=/srv/mamespin/log/mamespin.log
+ERR_PATH=/srv/mamespin/log/mamespin.err
+
+getPid () {
+    PID=`ps aux | grep $PATH_TO_JAR | grep -v grep | awk '{print $2}'`
+}
+
+start () {
+    echo "java $JVM_PARAMS -jar $PATH_TO_JAR $APP_PARAMS 2>> $ERR_PATH >> $LOG_PATH"
+          java $JVM_PARAMS -jar $PATH_TO_JAR $APP_PARAMS 2>> $ERR_PATH >> $LOG_PATH &
+    status
+}
+
+stop () {
+    kill $PID
+    status
+}
+
+
+status () {
+    getPid
+    if [ -z $PID ]; then
+        echo "$SERVICE_NAME NOT running."
+    else
+        echo "$SERVICE_NAME running with PID $PID..."
+    fi
+}
+
+getPid
+
 case $1 in
     start)
         echo "Starting $SERVICE_NAME ..."
-        if [ ! -f $PID_PATH_NAME ]; then
-            su - avilches nohup java -jar $PATH_TO_JAR /tmp 2>> $LOG_PATH/filesrv.err >> $LOG_PATH/filesrv.out &
-            echo $! > $PID_PATH_NAME
-            echo "$SERVICE_NAME started ..."
+        if [ -z $PID ]; then
+            start
         else
-            echo "$SERVICE_NAME is already running ..."
+            echo "$SERVICE_NAME is already running with PID $PID..."
         fi
     ;;
     stop)
-        if [ -f $PID_PATH_NAME ]; then
-            PID=$(cat $PID_PATH_NAME);
-            echo "$SERVICE_NAME stoping ..."
-            kill $PID;
-            echo "$SERVICE_NAME stopped ..."
-            rm $PID_PATH_NAME
+        echo "Stopping $SERVICE_NAME ..."
+        if [ -z $PID ]; then
+            echo "Can't stop $SERVICE_NAME because is not running"
         else
-            echo "$SERVICE_NAME is not running ..."
+            stop
         fi
     ;;
     restart)
-        if [ -f $PID_PATH_NAME ]; then
-            PID=$(cat $PID_PATH_NAME);
-            echo "$SERVICE_NAME stopping ...";
-            kill $PID;
-            echo "$SERVICE_NAME stopped ...";
-            rm $PID_PATH_NAME
-            echo "$SERVICE_NAME starting ..."
-            su - avilches nohup java -jar $PATH_TO_JAR /tmp 2>> $LOG_PATH/filesrv.err >> $LOG_PATH/filesrv.out &
-            echo "$SERVICE_NAME started ..."
+        echo "Restarting $SERVICE_NAME ..."
+        if [ -z $PID ]; then
+            start
         else
-            echo "$SERVICE_NAME is not running ..."
+            stop
+            start
         fi
+    ;;
+    status)
+        status
+    ;;
+    *)
+        echo "start|stop|restart|status"
     ;;
 esac

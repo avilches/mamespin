@@ -4,8 +4,8 @@ SERVICE_NAME=filesrv
 PATH_TO_JAR=/srv/mamespin/bin/filesrv.jar
 JVM_PARAMS="-Xms256m -Xmx512m -Djava.awt.headless=true"
 APP_PARAMS="/srv/mamespin/config"
-LOG_PATH=/srv/mamespin/log/mamespin.log
-ERR_PATH=/srv/mamespin/log/mamespin.err
+LOG_PATH=/srv/mamespin/log/filesrv.log
+ERR_PATH=/srv/mamespin/log/filesrv.err
 
 getPid () {
     PID=`ps aux | grep $PATH_TO_JAR | grep -v grep | awk '{print $2}'`

@@ -13,7 +13,7 @@ import java.io.OutputStream;
  */
 public class SlowOutputStream extends FilterOutputStream {
 
-    static long CHECK_EVERY_MILLIS = 10; // chequeo cada 10 millis
+    static long CHECK_EVERY_MILLIS = 100; // chequeo 10 veces por segundo (100 millis = 0.1s)
 
     int cps = -1;
     /**

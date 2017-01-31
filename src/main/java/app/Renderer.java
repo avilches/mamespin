@@ -22,7 +22,6 @@ public class Renderer {
         cfg.setDefaultEncoding("UTF-8");
         cfg.setTemplateExceptionHandler(TemplateExceptionHandler.RETHROW_HANDLER);
         cfg.setLogTemplateExceptions(false);
-        cfg.setTemplateUpdateDelay(0);
         return this;
     }
 

@@ -38,7 +38,7 @@ public class App implements LifeCycle.Listener {
     public Jedis jedis;
     public HikariDataSource ds;
     public TokenLogic tokenLogic;
-    public Conf conf;
+    public Timer timer;
 
     public static void main(String[] args) throws Exception {
         String folder = args.length > 0 ? args[0] : "/srv/mamespin/config";
@@ -51,19 +51,11 @@ public class App implements LifeCycle.Listener {
     private void start(String configFolder) throws Exception {
         start = System.currentTimeMillis();
 
-        conf = new Conf();
+        Conf conf = new Conf();
         conf.load(configFolder+"/mamespin-common-config.groovy");
         conf.load(configFolder+"/filesrv-config.groovy");
 
-        ds = new HikariDataSource();
-        ds.setJdbcUrl(conf.getDataSourceProperty("url").toString());
-        ds.setUsername(conf.getDataSourceProperty("username").toString());
-        ds.setPassword(conf.getDataSourceProperty("password").toString());
-        ds.setConnectionTimeout((int)conf.getDataSourceProperty("hikari.connectionTimeout"));
-        ds.setConnectionInitSql(conf.getDataSourceProperty("hikari.connectionInitSql").toString());
-        ds.setMaximumPoolSize((int)conf.getDataSourceProperty("hikari.maximumPoolSize"));
-        ds.setMinimumIdle((int)conf.getDataSourceProperty("hikari.minimumIdle"));
-        ds.setMaxLifetime((int)conf.getDataSourceProperty("hikari.maxLifetime"));
+        ds = createDataSource(conf);
 
         port = conf.getServerPort();
         server = new Server(port);
@@ -78,12 +70,8 @@ public class App implements LifeCycle.Listener {
 
         // jedis = new Jedis("localhost");
 
-        // TODO: si hay varios servidores sirviendo, se debe guardar el id del servidor en la tabla file_download y cada servidor
-        // solo debe borrar sus propias peticiones perdidas. Tal y como esta ahora se borrarian las de todos
-        tokenLogic.dbLogic.cleanTokens(0);
-
         ServletContextHandler ctx = createContext(conf.getVirtualHost(), "/");
-        createDownloadServlet(ctx, "/download/*");
+        createDownloadServlet(ctx, "/download/*", conf.loadCps(), conf.loadCpsMsgs());
         createMngServlet(ctx, "/mng/*");
         createStaticResourcesServlet(ctx, "/static/*", "/static");
 
@@ -91,13 +79,11 @@ public class App implements LifeCycle.Listener {
         server.setStopAtShutdown(true);
         server.addLifeCycleListener(this);
 
-
         stats = new StatisticsHandler();
         stats.setHandler(ctx);
         server.setHandler(stats);
 
-
-        lowResourcesMonitor=new LowResourceMonitor(server);
+        lowResourcesMonitor = new LowResourceMonitor(server);
         lowResourcesMonitor.setPeriod(1000);
         lowResourcesMonitor.setLowResourcesIdleTimeout(200);
         lowResourcesMonitor.setMonitorThreads(true);
@@ -108,8 +94,22 @@ public class App implements LifeCycle.Listener {
 
         server.start();
 
-        System.out.println("Scheduling cleaner. Initial delay: "+conf.getCleanerDelay()+"min. Every: "+conf.getCleanerPeriod()+"min");
-        new Timer().scheduleAtFixedRate(new TimerTask() {
+        runTokenCleanerTask(server, tokenLogic.dbLogic, conf.getCleanerDelay(), conf.getCleanerPeriod(), conf.getCleanerTimeout());
+
+        server.join();
+    }
+
+    private Timer runTokenCleanerTask(Server server, DbLogic dbLogic, int cleanerDelay, int cleanerPeriod, final int cleanerTimeout) {
+        // TODO: si hay varios servidores sirviendo, se debe guardar el id del servidor en la tabla file_download y cada servidor
+        // solo debe borrar sus propias peticiones perdidas. Tal y como esta ahora se borrarian las de todos
+
+        // Nada mas arrancar se hace una limpieza con timeout 0
+        dbLogic.cleanTokens(0);
+
+        System.out.println("Scheduling cleaner. Initial delay: "+ cleanerDelay +"min. Every: "+ cleanerPeriod +"min");
+        Timer timer = new Timer();
+
+        timer.scheduleAtFixedRate(new TimerTask() {
             AtomicBoolean busy = new AtomicBoolean(false);
             @Override
             public void run() {
@@ -119,17 +119,30 @@ public class App implements LifeCycle.Listener {
 
                     // TODO: si hay varios servidores sirviendo, se debe guardar el id del servidor en la tabla file_download y cada servidor
                     // solo debe borrar sus propias peticiones perdidas. Tal y como esta ahora se borrarian las de todos
-                    tokenLogic.dbLogic.cleanTokens(conf.getCleanerTimeout());
+                    dbLogic.cleanTokens(cleanerTimeout);
                 } catch(Exception e) {
                     e.printStackTrace(System.err);
                 } finally {
                     busy.set(false);
                 }
             }
-        }, TimeUnit.MINUTES.toMillis(conf.getCleanerDelay()),
-           TimeUnit.MINUTES.toMillis(conf.getCleanerPeriod()));
+        }, TimeUnit.MINUTES.toMillis(cleanerDelay),
+           TimeUnit.MINUTES.toMillis(cleanerPeriod));
 
-        server.join();
+        return timer;
+    }
+
+    private HikariDataSource createDataSource(Conf conf) {
+        HikariDataSource ds = new HikariDataSource();
+        ds.setJdbcUrl(conf.getDataSourceProperty("url").toString());
+        ds.setUsername(conf.getDataSourceProperty("username").toString());
+        ds.setPassword(conf.getDataSourceProperty("password").toString());
+        ds.setConnectionTimeout((int)conf.getDataSourceProperty("hikari.connectionTimeout"));
+        ds.setConnectionInitSql(conf.getDataSourceProperty("hikari.connectionInitSql").toString());
+        ds.setMaximumPoolSize((int)conf.getDataSourceProperty("hikari.maximumPoolSize"));
+        ds.setMinimumIdle((int)conf.getDataSourceProperty("hikari.minimumIdle"));
+        ds.setMaxLifetime((int)conf.getDataSourceProperty("hikari.maxLifetime"));
+        return ds;
     }
 
     private ServletContextHandler createContext(String vhost, String path) {
@@ -150,14 +163,14 @@ public class App implements LifeCycle.Listener {
         rootContext.addServlet(holder, path);
     }
 
-    private void createDownloadServlet(ServletContextHandler rootContext, String path) {
+    private void createDownloadServlet(ServletContextHandler rootContext, String path, int[] cpss, String[] cpsMsgs) {
         TokenServlet servlet = new TokenServlet();
         servlet.server = server;
         servlet.downloader = downloader;
         servlet.renderer = renderer;
         servlet.tokenLogic = tokenLogic;
-        servlet.cpss = conf.loadCps();
-        servlet.cpsMsgs = conf.loadCpsMsgs();
+        servlet.cpss = cpss;
+        servlet.cpsMsgs = cpsMsgs;
 
         ServletHolder holder = new ServletHolder(servlet);
         holder.setInitOrder(0);
@@ -193,7 +206,8 @@ public class App implements LifeCycle.Listener {
 
     @Override
     public void lifeCycleStopping(LifeCycle event) {
-        System.out.println("Stopping...");
+        System.out.println("Stopping timer...");
+        if (timer != null) timer.cancel();
     }
 
     @Override
